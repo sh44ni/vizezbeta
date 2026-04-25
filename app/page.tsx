@@ -7,6 +7,7 @@ import Sidebar from '@/components/Sidebar';
 import SettingsPanel from '@/components/SettingsPanel';
 import UploadScreen from '@/components/UploadScreen';
 import ExtractionScreen from '@/components/ExtractionScreen';
+import VisitVisaPromo from '@/components/VisitVisaPromo';
 import LetterGenerationScreen from '@/components/LetterGenerationScreen';
 import ManualVisaModule from '@/components/ManualVisaModule';
 import LoginScreen from '@/components/LoginScreen';
@@ -52,7 +53,7 @@ function AppContent() {
   const [activeModule, setActiveModule] = useState('visit-visa');
 
   // ── Visit Visa state ──
-  const [visitStep, setVisitStep] = useState<1 | 2 | 3 | 4>(1);
+  const [visitStep, setVisitStep] = useState<0 | 1 | 2 | 3 | 4>(0);
   const [passports, setPassports] = useState<PassportItem[]>([]);
   const [visitLogs, setVisitLogs] = useState<LogEntry[]>([]);
 
@@ -85,14 +86,14 @@ function AppContent() {
     setManualLogs((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, timestamp, level, message }]);
   }, []);
 
-  const handleVisitNext = () => setVisitStep((s) => Math.min(s + 1, 4) as 1 | 2 | 3 | 4);
-  const handleVisitPrev = () => setVisitStep((s) => Math.max(s - 1, 1) as 1 | 2 | 3 | 4);
+  const handleVisitNext = () => setVisitStep((s) => Math.min(s + 1, 4) as 0 | 1 | 2 | 3 | 4);
+  const handleVisitPrev = () => setVisitStep((s) => Math.max(s - 1, 1) as 0 | 1 | 2 | 3 | 4);
 
   const handleModuleChange = (id: string) => {
     setActiveModule(id);
     // Reset the module being left
     if (id === 'visit-visa') {
-      setVisitStep(1);
+      setVisitStep(0);
       setPassports([]);
       setVisitLogs([]);
     }
@@ -103,7 +104,7 @@ function AppContent() {
   };
 
   // Current step for sidebar tracker
-  const currentStep = activeModule === 'visit-visa' ? visitStep : manualStep;
+  const currentStep = activeModule === 'visit-visa' ? Math.max(visitStep, 1) : manualStep;
   const currentStepLabels = activeModule === 'visit-visa' ? VISIT_VISA_STEPS : MANUAL_VISA_STEPS;
   const meta = MODULE_META[activeModule] || MODULE_META['visit-visa'];
 
@@ -149,8 +150,8 @@ function AppContent() {
           top: 0,
         }}
       >
-        {/* Top bar — glass pill */}
-        <div
+        {/* Top bar — glass pill (hidden on promo) */}
+        {!(activeModule === 'visit-visa' && visitStep === 0) && <div
           style={{
             padding: '12px 32px',
             display: 'flex',
@@ -233,13 +234,14 @@ function AppContent() {
               );
             })}
           </div>
-        </div>
+        </div>}
 
         {/* Step content */}
         <div style={{ padding: '28px 32px', display: 'flex', flexDirection: 'column', flex: 1 }}>
           {/* ── Visit Visa ── */}
           {activeModule === 'visit-visa' && (
             <>
+              {visitStep === 0 && <VisitVisaPromo onGetStarted={() => setVisitStep(1)} />}
               {visitStep === 1 && <UploadScreen passports={passports} setPassports={setPassports} onNext={handleVisitNext} />}
               {visitStep === 2 && <ExtractionScreen passports={passports} setPassports={setPassports} logs={visitLogs} addLog={addVisitLog} onNext={handleVisitNext} onPrev={handleVisitPrev} isReview={false} />}
               {visitStep === 3 && <ExtractionScreen passports={passports} setPassports={setPassports} logs={visitLogs} addLog={addVisitLog} onNext={handleVisitNext} onPrev={handleVisitPrev} isReview={true} />}

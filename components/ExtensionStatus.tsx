@@ -271,7 +271,7 @@ function InstallWizard({ onClose, onRecheck }: { onClose: () => void; onRecheck:
               border: '1px solid var(--border)', background: '#000',
             }}>
               <video
-                src="/extension-tutorial.mp4"
+                src="https://res.cloudinary.com/dp3fmjjeu/video/upload/v1777143106/0425_zkqieg.mp4"
                 controls
                 autoPlay
                 style={{ width: '100%', display: 'block', maxHeight: 280 }}
