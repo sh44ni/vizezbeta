@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth, VizUser } from '@/context/AuthContext';
 import { X, UserPlus, Trash2, Shield, User, AlertCircle } from 'lucide-react';
 
@@ -20,7 +20,7 @@ export default function UserManagement({ isOpen, onClose }: Props) {
 
   if (!isOpen || !isAdmin) return null;
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setError('');
     if (!newName.trim() || !newUsername.trim() || !newPassword.trim()) {
       setError('All fields are required');
@@ -34,7 +34,7 @@ export default function UserManagement({ isOpen, onClose }: Props) {
       setError('Password must be at least 4 characters');
       return;
     }
-    const ok = addUser({
+    const ok = await addUser({
       name: newName.trim(),
       username: newUsername.trim().toLowerCase(),
       password: newPassword.trim(),
@@ -49,9 +49,9 @@ export default function UserManagement({ isOpen, onClose }: Props) {
     setShowAdd(false);
   };
 
-  const handleDelete = (username: string) => {
+  const handleDelete = async (username: string) => {
     if (confirmDelete === username) {
-      deleteUser(username);
+      await deleteUser(username);
       setConfirmDelete(null);
     } else {
       setConfirmDelete(username);

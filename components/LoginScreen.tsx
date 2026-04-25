@@ -18,7 +18,7 @@ export default function LoginScreen() {
     userRef.current?.focus();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -30,15 +30,12 @@ export default function LoginScreen() {
 
     setLoading(true);
 
-    // Simulate tiny delay for UX
-    setTimeout(() => {
-      const ok = login(username.trim(), password);
-      if (!ok) {
-        setError('Invalid credentials');
-        setLoading(false);
-        triggerShake();
-      }
-    }, 400);
+    const ok = await login(username.trim(), password);
+    if (!ok) {
+      setError('Invalid credentials');
+      setLoading(false);
+      triggerShake();
+    }
   };
 
   const triggerShake = () => {

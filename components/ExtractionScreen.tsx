@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { ExtractedData, LogEntry, PassportItem } from '@/app/types';
+import { useAuth } from '@/context/AuthContext';
 import {
   ArrowLeft, ArrowRight, CheckCircle2, AlertCircle, Clock, Loader2,
   Zap, AlertTriangle, Bot, Pencil, Check,
@@ -132,6 +133,7 @@ function ReviewMode({ passports, setPassports, onNext, onPrev }: { passports: Pa
 }
 
 export default function ExtractionScreen({ passports, setPassports, logs, addLog, onNext, onPrev, isReview }: Props) {
+  const { user } = useAuth();
   const isExtracting = useRef(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const initialPassports = useRef(passports);
@@ -182,7 +184,7 @@ export default function ExtractionScreen({ passports, setPassports, logs, addLog
               full_name: data.full_name,
               passport_number: data.passport_number,
               nationality: data.nationality,
-              processed_by: 'user',
+              processed_by: user?.name || user?.username || 'unknown',
             }),
           }).catch(() => {});
           success = true;

@@ -300,11 +300,11 @@ export default function Sidebar({
               flexShrink: 0,
             }}
           >
-            {user.name.charAt(0).toUpperCase()}
+            {(user.name || user.username || '?').charAt(0).toUpperCase()}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-              {user.name}
+              {user.name || user.username}
             </div>
             <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '1px' }}>
               @{user.username}
