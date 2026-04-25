@@ -23,11 +23,18 @@ export async function POST(req: NextRequest) {
     const prompt = `You are a passport OCR specialist. Extract data from this passport image accurately.
 The document may contain Arabic and English text. Fully support Arabic text extraction natively.
 For names, if English and Arabic are both present, extract the English spelling, or use the MRZ for accuracy.
+
+CRITICAL RULES:
+- Extract ALL text EXACTLY as printed on the passport. Do NOT correct, alter, or "fix" any spelling.
+- Names must be copied character-for-character as they appear on the document. Do NOT rearrange, capitalize differently, or modify the spelling in any way.
+- If a field is not legible or you cannot confidently read it, return "[UNREADABLE]" for that field instead of guessing.
+- Never invent or assume any data. Only return what is clearly visible.
+
 Return ONLY a JSON object with these exact fields:
 {
-  "full_name": "last name then first name exactly as on passport",
+  "full_name": "last name then first name EXACTLY as spelled on passport - do NOT alter spelling",
   "passport_number": "exactly as shown",
-  "nationality": "as written on passport",
+  "nationality": "exactly as written on passport",
   "date_of_birth": "DD MMM YYYY",
   "expiry_date": "DD MMM YYYY"
 }

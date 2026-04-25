@@ -68,12 +68,18 @@ For names, if English and Arabic are both present, extract the English spelling,
 Use the MRZ (machine-readable zone) at the bottom for verification.
 Convert all dates to DD/MM/YYYY format.
 For gender, return only "M" or "F".
-If a field is not present or not visible, return an empty string "".
+
+CRITICAL RULES:
+- Extract ALL text EXACTLY as printed on the passport. Do NOT correct, alter, or "fix" any spelling.
+- Names must be copied character-for-character as they appear on the document. Do NOT rearrange, capitalize differently, or modify the spelling in any way.
+- If a field is not legible or you cannot confidently read it, return "[UNREADABLE]" for that field instead of guessing.
+- Never invent or assume any data. Only return what is clearly visible.
+- If a field is not present or not visible, return an empty string "".
 
 Return ONLY a valid JSON object with exactly these fields:
 {
-  "surname": "family/last name exactly as on passport",
-  "first_name": "first given name",
+  "surname": "family/last name EXACTLY as spelled on passport - do NOT alter",
+  "first_name": "first given name EXACTLY as spelled",
   "second_name": "second given name if exists, else empty string",
   "third_name": "third given name if exists, else empty string",
   "passport_number": "exactly as shown",
@@ -81,7 +87,7 @@ Return ONLY a valid JSON object with exactly these fields:
   "place_of_issue": "city or authority that issued the passport",
   "expiry_date": "DD/MM/YYYY",
   "passport_country": "country that issued the passport",
-  "nationality": "nationality as written on passport",
+  "nationality": "nationality exactly as written on passport",
   "date_of_birth": "DD/MM/YYYY",
   "city_of_birth": "city of birth",
   "country_of_birth": "country of birth",
