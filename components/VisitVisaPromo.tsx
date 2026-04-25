@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Upload, Brain, FileCheck, FileText, Sparkles, Zap, Clock,
   Users, ArrowRight, ChevronRight, Shield, Eye, Wand2,
   Scan, Stamp, LayoutTemplate, Play, CheckCircle2, Cpu,
-  MousePointerClick,
+  MousePointerClick, Lock,
 } from 'lucide-react';
 
 interface Props {
@@ -121,14 +121,20 @@ export default function VisitVisaPromo({ onGetStarted }: Props) {
   const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
   const [hoveredStep, setHoveredStep] = useState<number | null>(null);
   const [heroVisible, setHeroVisible] = useState(false);
+  const [showLocked, setShowLocked] = useState(false);
 
-  const passportsCounter = useCounter(500, 2200);
-  const timeCounter = useCounter(95, 1800);
-  const accuracyCounter = useCounter(99, 1600);
+  const speedCounter = useCounter(10, 1800);
+  const staffCounter = useCounter(10, 2200);
+  const secondsCounter = useCounter(8, 1600);
 
   useEffect(() => {
     const t = setTimeout(() => setHeroVisible(true), 100);
     return () => clearTimeout(t);
+  }, []);
+
+  const handleLocked = useCallback(() => {
+    setShowLocked(true);
+    setTimeout(() => setShowLocked(false), 3500);
   }, []);
 
   return (
@@ -191,7 +197,7 @@ export default function VisitVisaPromo({ onGetStarted }: Props) {
         {/* CTA + secondary */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
           <button
-            onClick={onGetStarted}
+            onClick={handleLocked}
             className="btn-primary"
             style={{
               padding: '14px 36px', fontSize: '15px', fontWeight: 700,
@@ -468,29 +474,29 @@ export default function VisitVisaPromo({ onGetStarted }: Props) {
       }}>
         {[
           {
-            ref: passportsCounter.ref,
-            value: passportsCounter.value + '+',
-            label: 'Passports Processed',
-            sub: 'and counting',
-            icon: FileCheck,
+            ref: speedCounter.ref,
+            value: speedCounter.value + 'x',
+            label: 'Faster Processing',
+            sub: 'compared to manual data entry',
+            icon: Zap,
             color: '#7c5cfc',
             gradient: 'linear-gradient(135deg, rgba(124,92,252,0.1), rgba(124,92,252,0.03))',
           },
           {
-            ref: timeCounter.ref,
-            value: timeCounter.value + '%',
-            label: 'Time Saved',
-            sub: 'vs manual processing',
-            icon: Clock,
+            ref: staffCounter.ref,
+            value: '1/' + staffCounter.value,
+            label: 'Staff Required',
+            sub: 'one person does the job of ten',
+            icon: Users,
             color: '#38bdf8',
             gradient: 'linear-gradient(135deg, rgba(56,189,248,0.1), rgba(56,189,248,0.03))',
           },
           {
-            ref: accuracyCounter.ref,
-            value: accuracyCounter.value + '%',
-            label: 'Extraction Accuracy',
-            sub: 'GPT-4 Vision powered',
-            icon: Wand2,
+            ref: secondsCounter.ref,
+            value: secondsCounter.value + 's',
+            label: 'Per Passport',
+            sub: 'AI extracts all fields instantly',
+            icon: Clock,
             color: '#34d399',
             gradient: 'linear-gradient(135deg, rgba(52,211,153,0.1), rgba(52,211,153,0.03))',
           },
@@ -575,7 +581,7 @@ export default function VisitVisaPromo({ onGetStarted }: Props) {
         </div>
 
         <button
-          onClick={onGetStarted}
+          onClick={handleLocked}
           className="btn-primary"
           style={{
             padding: '14px 32px', fontSize: '14px', fontWeight: 700,
@@ -594,6 +600,66 @@ export default function VisitVisaPromo({ onGetStarted }: Props) {
           <ArrowRight style={{ width: 15, height: 15 }} />
         </button>
       </div>
+
+      {/* ══════════════════════════════════════════
+         LOCKED TOAST
+      ══════════════════════════════════════════ */}
+      {showLocked && (
+        <div
+          className="animate-slide-up"
+          style={{
+            position: 'fixed',
+            bottom: '32px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '16px 28px',
+            borderRadius: '16px',
+            background: 'var(--surface-solid)',
+            border: '1px solid rgba(251,191,36,0.3)',
+            boxShadow: '0 16px 48px rgba(0,0,0,0.5), 0 0 40px rgba(251,191,36,0.1)',
+            backdropFilter: 'blur(20px)',
+          }}
+        >
+          <div style={{
+            width: '40px', height: '40px', borderRadius: '12px',
+            background: 'linear-gradient(135deg, rgba(251,191,36,0.2), rgba(251,191,36,0.05))',
+            border: '1px solid rgba(251,191,36,0.25)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <Lock style={{ width: 18, height: 18, color: 'var(--warn)' }} />
+          </div>
+          <div>
+            <div style={{
+              fontSize: '14px', fontWeight: 700,
+              fontFamily: "'Outfit', 'Inter', sans-serif",
+              color: 'var(--text-primary)',
+              marginBottom: '2px',
+            }}>
+              Module Not Unlocked Yet
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+              This agent is still being configured. Check back soon!
+            </div>
+          </div>
+          {/* Auto-dismiss progress bar */}
+          <div style={{
+            position: 'absolute', bottom: 0, left: '16px', right: '16px',
+            height: '3px', borderRadius: '0 0 16px 16px', overflow: 'hidden',
+            background: 'rgba(251,191,36,0.1)',
+          }}>
+            <div style={{
+              height: '100%', background: 'var(--warn)',
+              borderRadius: '99px',
+              animation: 'toast-shrink 3.5s linear forwards',
+            }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
