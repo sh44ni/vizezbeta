@@ -174,6 +174,17 @@ export default function ExtractionScreen({ passports, setPassports, logs, addLog
           setProgress(item.id, 100);
           setPassports((prev) => prev.map((p) => p.id === item.id ? { ...p, status: 'extracted', progress: 100, extractedData: data } : p));
           addLog('success', `${data.full_name} — ${data.passport_number} — ${data.nationality}`);
+          // Log to database (fire-and-forget)
+          fetch('/api/passport-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              full_name: data.full_name,
+              passport_number: data.passport_number,
+              nationality: data.nationality,
+              processed_by: 'user',
+            }),
+          }).catch(() => {});
           success = true;
         } catch (error) {
           const err = error as Error; attempts++;

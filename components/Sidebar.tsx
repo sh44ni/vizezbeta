@@ -10,6 +10,7 @@ import {
   Moon,
   LogOut,
   Users,
+  Database,
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -52,6 +53,7 @@ interface Props {
   onModuleChange: (id: string) => void;
   onSettingsOpen: () => void;
   onAccessOpen?: () => void;
+  onLogsOpen?: () => void;
 }
 
 export default function Sidebar({
@@ -59,6 +61,7 @@ export default function Sidebar({
   onModuleChange,
   onSettingsOpen,
   onAccessOpen,
+  onLogsOpen,
 }: Props) {
   const { theme, toggle } = useTheme();
   const { user, isAdmin, logout } = useAuth();
@@ -412,6 +415,49 @@ export default function Sidebar({
             }}
           >
             <Users className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Passport logs (admin only) */}
+        {isAdmin && onLogsOpen && (
+          <button
+            onClick={onLogsOpen}
+            title="Passport Logs"
+            style={{
+              width: '40px',
+              height: '40px',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '99px',
+              border: '1px solid var(--border)',
+              background: 'var(--glass-bg)',
+              backdropFilter: 'blur(10px)',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              transition: 'all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = 'var(--accent-subtle)';
+              (e.currentTarget as HTMLElement).style.color = 'var(--accent)';
+              (e.currentTarget as HTMLElement).style.transform = 'scale(1.1)';
+              (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-bright)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = 'var(--glass-bg)';
+              (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)';
+              (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+              (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)';
+            }}
+            onMouseDown={(e) => {
+              (e.currentTarget as HTMLElement).style.transform = 'scale(0.95)';
+            }}
+            onMouseUp={(e) => {
+              (e.currentTarget as HTMLElement).style.transform = 'scale(1.1)';
+            }}
+          >
+            <Database className="w-4 h-4" />
           </button>
         )}
 

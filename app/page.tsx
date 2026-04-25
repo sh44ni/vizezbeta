@@ -13,6 +13,7 @@ import ManualVisaModule from '@/components/ManualVisaModule';
 import LoginScreen from '@/components/LoginScreen';
 import LoadingScreen from '@/components/LoadingScreen';
 import UserManagement from '@/components/UserManagement';
+import PassportLogsPanel from '@/components/PassportLogsPanel';
 import { LogEntry, PassportItem } from './types';
 
 const DEFAULT_LETTERHEAD = '';
@@ -64,6 +65,7 @@ function AppContent() {
   // ── Global settings ──
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);
   const [letterheadSrc, setLetterheadSrc] = useState(DEFAULT_LETTERHEAD);
   const [stampSrc, setStampSrc] = useState(DEFAULT_STAMP);
 
@@ -135,6 +137,7 @@ function AppContent() {
         onModuleChange={handleModuleChange}
         onSettingsOpen={() => setSettingsOpen(true)}
         onAccessOpen={() => setAccessOpen(true)}
+        onLogsOpen={() => setLogsOpen(true)}
       />
 
       {/* Main content */}
@@ -280,6 +283,12 @@ function AppContent() {
       <UserManagement
         isOpen={accessOpen}
         onClose={() => setAccessOpen(false)}
+      />
+
+      {/* Passport logs panel (admin only) */}
+      <PassportLogsPanel
+        isOpen={logsOpen}
+        onClose={() => setLogsOpen(false)}
       />
     </div>
     </>
