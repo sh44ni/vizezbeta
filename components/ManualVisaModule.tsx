@@ -175,8 +175,7 @@ function UploadStep({
               <li>Upload one or more passport images</li>
               <li>Optionally add a <strong>Work Permit (Madunia)</strong> image per applicant</li>
               <li>AI extracts all fields required by the ROP eVisa portal</li>
-              <li>Review, edit, then manually copy each field into the portal</li>
-              <li><strong>Auto-fill coming soon</strong></li>
+              <li>Review, edit, then <strong>send directly to the ROP portal via AutoFiller</strong></li>
             </ul>
           </div>
           <button onClick={() => setShowInfo(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0, padding: 0 }}>
