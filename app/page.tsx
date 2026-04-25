@@ -14,6 +14,7 @@ import LoginScreen from '@/components/LoginScreen';
 import LoadingScreen from '@/components/LoadingScreen';
 import UserManagement from '@/components/UserManagement';
 import PassportLogsPanel from '@/components/PassportLogsPanel';
+import MobileBlocker from '@/components/MobileBlocker';
 import { LogEntry, PassportItem } from './types';
 
 const DEFAULT_LETTERHEAD = '';
@@ -299,6 +300,7 @@ export default function Home() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <MobileBlocker />
         <AppContent />
       </AuthProvider>
     </ThemeProvider>
