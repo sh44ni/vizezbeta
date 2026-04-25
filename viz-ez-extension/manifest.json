@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "VizEz AutoFiller",
+  "version": "1.0",
+  "description": "Bridges extracted passport data from VizEz securely into the Royal Oman Police portal.",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "scripting"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:*/*", "http://127.0.0.1:*/*", "*://viz-ez.com/*", "*://*.viz-ez.com/*"],
+      "js": ["content_vizez.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["*://www.rop.gov.om/*", "*://rop.gov.om/*", "file:///*", "http://localhost:*/*", "http://127.0.0.1:*/*"],
+      "js": ["content_rop.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_title": "VizEz AutoFiller"
+  }
+}
