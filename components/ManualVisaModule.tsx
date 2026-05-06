@@ -4,7 +4,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ManualVisaItem, ManualPassportData, ManualWorkPermitData, LogEntry } from '@/app/types';
 import {
   UploadCloud, X, ArrowRight, ArrowLeft, Info, CheckCircle2, AlertCircle,
-  Clock, Loader2, Copy, Check,
+  Clock, Loader2, Copy, Check, AlertTriangle, Cpu,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────
@@ -55,16 +55,36 @@ function ts() {
 }
 
 // ─────────────────────────────────────────────────────
+// AI MODEL OPTIONS
+// ─────────────────────────────────────────────────────
+interface AIModel {
+  id: string;
+  label: string;
+  sublabel: string;
+  available: boolean;
+  icon: string;
+}
+
+const AI_MODELS: AIModel[] = [
+  { id: 'gpt-4o', label: 'GPT-4', sublabel: 'Passport Expert', available: true, icon: '🧠' },
+  { id: 'sonnet-4', label: 'Sonnet 4', sublabel: 'Passport Expert', available: false, icon: '🔮' },
+];
+
+// ─────────────────────────────────────────────────────
 // UPLOAD STEP
 // ─────────────────────────────────────────────────────
 function UploadStep({
   items,
   setItems,
   onNext,
+  selectedModel,
+  onModelChange,
 }: {
   items: ManualVisaItem[];
   setItems: React.Dispatch<React.SetStateAction<ManualVisaItem[]>>;
   onNext: () => void;
+  selectedModel: string;
+  onModelChange: (id: string) => void;
 }) {
   const [passportDrag, setPassportDrag] = useState(false);
   const [wpDrag, setWpDrag] = useState(false);
@@ -184,6 +204,96 @@ function UploadStep({
         </div>
       )}
 
+      {/* AI Model selector */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Cpu className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+          <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+            AI Extraction Model
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {AI_MODELS.map((model) => {
+            const isSelected = model.id === selectedModel;
+            return (
+              <button
+                key={model.id}
+                onClick={() => model.available && onModelChange(model.id)}
+                disabled={!model.available}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '12px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  border: isSelected
+                    ? '1.5px solid var(--accent)'
+                    : '1px solid var(--border)',
+                  background: isSelected
+                    ? 'var(--accent-subtle)'
+                    : 'var(--glass-bg)',
+                  backdropFilter: 'blur(10px)',
+                  cursor: model.available ? 'pointer' : 'not-allowed',
+                  opacity: model.available ? 1 : 0.5,
+                  transition: 'all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  textAlign: 'left',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  boxShadow: isSelected ? '0 0 20px rgba(124,92,252,0.12)' : 'none',
+                }}
+                onMouseEnter={(e) => {
+                  if (model.available && !isSelected) {
+                    (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-bright)';
+                    (e.currentTarget as HTMLElement).style.transform = 'scale(1.02)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) {
+                    (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)';
+                    (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+                  }
+                }}
+              >
+                <span style={{ fontSize: '20px', lineHeight: 1 }}>{model.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: '12.5px',
+                    fontWeight: isSelected ? 700 : 500,
+                    color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    fontFamily: "'Outfit', 'Inter', sans-serif",
+                  }}>
+                    {model.label}
+                  </div>
+                  <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', marginTop: '1px' }}>
+                    {model.sublabel}
+                  </div>
+                </div>
+                {isSelected && (
+                  <div style={{
+                    width: '18px', height: '18px', borderRadius: '50%',
+                    background: 'var(--accent)', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <Check className="w-2.5 h-2.5" style={{ color: '#fff' }} />
+                  </div>
+                )}
+                {!model.available && (
+                  <span style={{
+                    fontSize: '8px', fontWeight: 700, letterSpacing: '0.1em',
+                    textTransform: 'uppercase', padding: '2px 7px', borderRadius: '99px',
+                    background: 'var(--warn-bg)', color: 'var(--warn)',
+                    border: '1px solid rgba(251,191,36,0.2)', flexShrink: 0,
+                  }}>
+                    Soon
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Passport drop zone */}
       <div
         onDragOver={(e) => { e.preventDefault(); setPassportDrag(true); }}
@@ -292,6 +402,7 @@ function ExtractStep({
   addLog,
   onNext,
   onPrev,
+  selectedModel,
 }: {
   items: ManualVisaItem[];
   setItems: React.Dispatch<React.SetStateAction<ManualVisaItem[]>>;
@@ -299,6 +410,7 @@ function ExtractStep({
   addLog: (level: LogEntry['level'], message: string) => void;
   onNext: () => void;
   onPrev: () => void;
+  selectedModel: string;
 }) {
   const isExtracting = useRef(false);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -329,13 +441,15 @@ function ExtractStep({
 
     for (let i = 0; i < pending.length; i++) {
       const item = pending[i];
-      addLog('info', `[${i + 1}/${pending.length}] Processing "${item.passportFile?.name}"…`);
+      const modelLabel = AI_MODELS.find(m => m.id === selectedModel)?.label || selectedModel;
+      addLog('info', `[${i + 1}/${pending.length}] Processing "${item.passportFile?.name}" with ${modelLabel}…`);
       setItems((prev) => prev.map((x) => x.id === item.id ? { ...x, status: 'extracting', progress: 20 } : x));
 
       try {
         const fd = new FormData();
         fd.append('passport', item.passportFile!);
         if (item.workPermitFile) fd.append('work_permit', item.workPermitFile);
+        fd.append('model', selectedModel);
 
         setItems((prev) => prev.map((x) => x.id === item.id ? { ...x, progress: 55 } : x));
         const res = await fetch('/api/extract-manual', { method: 'POST', body: fd });
@@ -361,15 +475,23 @@ function ExtractStep({
         if (item.passportFile) passportImageDataUrl = await fileToDataUrl(item.passportFile);
         if (item.workPermitFile) workPermitImageDataUrl = await fileToDataUrl(item.workPermitFile);
 
+        // Capture validation warnings from server
+        const validationWarnings: string[] = data._validation || [];
+
         setItems((prev) =>
           prev.map((x) =>
             x.id === item.id
-              ? { ...x, status: 'extracted', progress: 100, passportData: data.passportData, workPermitData: data.workPermitData, passportImageDataUrl, workPermitImageDataUrl }
+              ? { ...x, status: 'extracted', progress: 100, passportData: data.passportData, workPermitData: data.workPermitData, passportImageDataUrl, workPermitImageDataUrl, validationWarnings }
               : x,
           ),
         );
         const pp = data.passportData;
         addLog('success', `✓ "${item.passportFile?.name}" → ${pp?.surname} ${pp?.first_name} | ${pp?.passport_number}${data.workPermitData ? ` | Civil ID: ${data.workPermitData.civil_id}` : ''}`);
+
+        // Log validation warnings
+        if (validationWarnings.length > 0) {
+          validationWarnings.forEach(w => addLog('warn', w));
+        }
       } catch (err) {
         const e = err as Error;
         setItems((prev) => prev.map((x) => x.id === item.id ? { ...x, status: 'error', progress: 0, errorMsg: e.message } : x));
@@ -593,6 +715,19 @@ function ReviewStep({
         {/* Field panel */}
         {selected && selected.passportData ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
+            {/* Validation warnings banner */}
+            {selected.validationWarnings && selected.validationWarnings.length > 0 && (
+              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
+                <div style={{ fontSize: '11.5px', color: '#f59e0b', lineHeight: 1.7 }}>
+                  <strong style={{ display: 'block', marginBottom: '3px' }}>Validation Warnings — please verify:</strong>
+                  {selected.validationWarnings.map((w, i) => (
+                    <div key={i}>{w}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Passport fields */}
             <div className="glass-card" style={{ overflow: 'hidden' }}>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -728,6 +863,7 @@ const STORAGE_KEY = 'vizez_manual_v2';
 export default function ManualVisaModule({ logs, addLog, onStepChange }: Props) {
   const [step, setStep] = useState<Step>(1);
   const [items, setItems] = useState<ManualVisaItem[]>([]);
+  const [selectedModel, setSelectedModel] = useState('gpt-4o');
 
   // ── Restore persisted data on mount ──────────────────
   useEffect(() => {
@@ -790,8 +926,8 @@ export default function ManualVisaModule({ logs, addLog, onStepChange }: Props) 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {step === 1 && <UploadStep items={items} setItems={setItems} onNext={goNext} />}
-      {step === 2 && <ExtractStep items={items} setItems={setItems} logs={logs} addLog={addLog} onNext={goNext} onPrev={goPrev} />}
+      {step === 1 && <UploadStep items={items} setItems={setItems} onNext={goNext} selectedModel={selectedModel} onModelChange={setSelectedModel} />}
+      {step === 2 && <ExtractStep items={items} setItems={setItems} logs={logs} addLog={addLog} onNext={goNext} onPrev={goPrev} selectedModel={selectedModel} />}
       {step === 3 && <ReviewStep items={items} setItems={setItems} onPrev={goPrev} onClear={clearAll} />}
     </div>
   );

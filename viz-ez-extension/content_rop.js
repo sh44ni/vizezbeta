@@ -61,13 +61,24 @@ function fetchAndFillData(btn) {
           const select = document.getElementById(id);
           if (!select) return;
           const t = text.toUpperCase().trim();
+          // 1) Try exact match first
           for (let i = 0; i < select.options.length; i++) {
             const opt = select.options[i].text.toUpperCase().trim();
-            if (opt.includes(t) || t.includes(opt)) {
+            if (opt === t) {
               select.selectedIndex = i;
               select.dispatchEvent(new Event('change', { bubbles: true }));
               filled++;
-              break;
+              return;
+            }
+          }
+          // 2) Fuzzy fallback — prefer opt.includes(t) only (not reverse, to avoid FEMALE matching MALE)
+          for (let i = 0; i < select.options.length; i++) {
+            const opt = select.options[i].text.toUpperCase().trim();
+            if (opt.includes(t) || (t.length > opt.length && t.includes(opt))) {
+              select.selectedIndex = i;
+              select.dispatchEvent(new Event('change', { bubbles: true }));
+              filled++;
+              return;
             }
           }
         };
@@ -158,11 +169,26 @@ function fetchAndFillData(btn) {
         // Mother's Name — we never have this data, so always use "MRS"
         fill('txtMotherName', 'MRS');
 
-        let gender = data.gender || '';
-        if (gender.length === 1) {
-          gender = gender.toUpperCase() === 'M' ? 'Male' : gender.toUpperCase() === 'F' ? 'Female' : gender;
+        // Gender — use strict matching to avoid "FEMALE" matching "MALE"
+        let gender = (data.gender || '').toUpperCase().trim();
+        if (gender === 'M' || gender === 'MALE') {
+          gender = 'Male';
+        } else if (gender === 'F' || gender === 'FEMALE') {
+          gender = 'Female';
         }
-        setSelect('ddlGender', gender);
+        if (gender) {
+          const genderSelect = document.getElementById('ddlGender');
+          if (genderSelect) {
+            for (let i = 0; i < genderSelect.options.length; i++) {
+              if (genderSelect.options[i].text.toUpperCase().trim() === gender.toUpperCase()) {
+                genderSelect.selectedIndex = i;
+                genderSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                filled++;
+                break;
+              }
+            }
+          }
+        }
 
         fill('txtDOB',       data.date_of_birth || data.dob || data.dateOfBirth || '');
         fill('txtBirthCity', data.city_of_birth || data.cityOfBirth || '');

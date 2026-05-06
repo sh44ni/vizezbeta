@@ -75,4 +75,6 @@ export interface ManualVisaItem {
   // Base64 data URLs for document preview in extension
   passportImageDataUrl?: string;
   workPermitImageDataUrl?: string;
+  // Validation warnings from server-side cross-checks
+  validationWarnings?: string[];
 }

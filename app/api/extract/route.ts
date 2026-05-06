@@ -24,7 +24,14 @@ export async function POST(req: NextRequest) {
 The document may contain Arabic and English text. Fully support Arabic text extraction natively.
 For names, if English and Arabic are both present, extract the English spelling, or use the MRZ for accuracy.
 
-CRITICAL RULES:
+CRITICAL DATE EXTRACTION RULES:
+- DATES MUST BE READ EXACTLY FROM THE DOCUMENT. Do NOT calculate, estimate, or guess any date.
+- The EXPIRY DATE must be read directly from the passport's "Date of Expiry" field, NOT calculated from issue date.
+- CROSS-VERIFY all dates against the MRZ (machine-readable zone) at the bottom of the passport.
+- If the printed date and MRZ date conflict, USE THE MRZ DATE.
+- If you cannot clearly read a date, return "[UNREADABLE]". NEVER fabricate a date.
+
+CRITICAL GENERAL RULES:
 - Extract ALL text EXACTLY as printed on the passport. Do NOT correct, alter, or "fix" any spelling.
 - Names must be copied character-for-character as they appear on the document. Do NOT rearrange, capitalize differently, or modify the spelling in any way.
 - If a field is not legible or you cannot confidently read it, return "[UNREADABLE]" for that field instead of guessing.
@@ -35,8 +42,8 @@ Return ONLY a JSON object with these exact fields:
   "full_name": "last name then first name EXACTLY as spelled on passport - do NOT alter spelling",
   "passport_number": "exactly as shown",
   "nationality": "exactly as written on passport",
-  "date_of_birth": "DD MMM YYYY",
-  "expiry_date": "DD MMM YYYY"
+  "date_of_birth": "DD MMM YYYY - read from document, cross-verify with MRZ",
+  "expiry_date": "DD MMM YYYY - MUST be read from passport or MRZ, NEVER calculated"
 }
 Use the MRZ zone at the bottom for accuracy if visible. Return nothing else. Output must be valid JSON only.`;
 
@@ -62,7 +69,7 @@ Use the MRZ zone at the bottom for accuracy if visible. Return nothing else. Out
           },
         ],
         temperature: 0.1,
-        max_tokens: 400,
+        max_tokens: 600,
       }),
     });
 
