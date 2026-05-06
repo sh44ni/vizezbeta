@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "VizEz AutoFiller — ROP eVisa Portal",
+  "name": "VizEz AutoFiller — DEV",
   "version": "1.2.0",
-  "description": "Bridges extracted passport & work permit data from VizEz into the Royal Oman Police eVisa portal. AI-powered OCR autofill with document preview.",
+  "description": "DEV BUILD — Bridges extracted passport & work permit data from VizEz into the Royal Oman Police eVisa portal.",
   "permissions": [
     "storage",
     "activeTab"
@@ -17,18 +17,18 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://viz-ez.com/*", "*://*.viz-ez.com/*", "*://vizez.vercel.app/*"],
+      "matches": ["http://localhost:*/*", "http://127.0.0.1:*/*", "*://viz-ez.com/*", "*://*.viz-ez.com/*", "*://vizez.vercel.app/*"],
       "js": ["content_vizez.js"],
       "run_at": "document_end"
     },
     {
-      "matches": ["*://www.rop.gov.om/*", "*://rop.gov.om/*"],
+      "matches": ["*://www.rop.gov.om/*", "*://rop.gov.om/*", "file:///*", "http://localhost:*/*", "http://127.0.0.1:*/*"],
       "js": ["content_rop.js"],
       "run_at": "document_end"
     }
   ],
   "action": {
-    "default_title": "VizEz AutoFiller",
+    "default_title": "VizEz AutoFiller (DEV)",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
