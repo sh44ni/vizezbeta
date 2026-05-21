@@ -281,7 +281,7 @@ export default function LoginScreen() {
                 border: '1px solid rgba(255,255,255,0.12)',
                 color: 'rgba(255,255,255,0.45)',
               }}>
-                Early Access
+                Open Beta
               </span>
             </div>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', margin: 0 }}>

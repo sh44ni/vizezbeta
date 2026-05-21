@@ -125,7 +125,7 @@ export default function Sidebar({
             border: '1px solid var(--border)',
           }}
         >
-          Beta
+          v3.0
         </span>
       </div>
 

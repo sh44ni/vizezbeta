@@ -121,7 +121,7 @@ export default function AppShell({ children, onSettingsOpen, onAccessOpen, onLog
               color: 'rgba(255,255,255,0.35)',
               flexShrink: 0,
             }}>
-              Beta
+              v3.0
             </span>
           )}
         </div>

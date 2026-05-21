@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
         <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 400px; margin: 0 auto; padding: 40px 20px;">
           <div style="text-align: center; margin-bottom: 32px;">
             <h1 style="font-size: 20px; font-weight: 700; color: #ffffff; margin: 0;">VizEz</h1>
-            <p style="font-size: 12px; color: #888; margin: 4px 0 0;">Early Access Portal</p>
+            <p style="font-size: 12px; color: #888; margin: 4px 0 0;">Open Beta</p>
           </div>
           <div style="background: #0a0a0a; border: 1px solid #222; border-radius: 12px; padding: 32px; text-align: center;">
             <p style="font-size: 14px; color: #aaa; margin: 0 0 20px;">Your access code is:</p>

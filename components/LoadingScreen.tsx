@@ -202,7 +202,7 @@ export default function LoadingScreen({ onComplete }: Props) {
             border: '1px solid rgba(255,255,255,0.12)',
             color: 'rgba(255,255,255,0.40)',
           }}>
-            Beta
+            v3.0
           </span>
         </div>
 
