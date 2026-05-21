@@ -349,54 +349,76 @@ function doFill() {
 
   // Load data into legacy storage for content scripts
   chrome.storage.local.set({ vizezPassportData: app.data }, () => {
-    // Trigger fill on active tab
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (!tabs[0]?.id) {
         showToast('❌ No active tab found', 'error');
         resetFillBtn();
         return;
       }
 
-      chrome.tabs.sendMessage(tabs[0].id, { type: 'VIZEZ_AUTOFILL' }, (response) => {
-        if (chrome.runtime.lastError) {
-          // Content script not loaded — probably not on the right page
-          showToast('❌ Not on portal page. Navigate to the portal first.', 'error');
-          resetFillBtn();
-          return;
-        }
+      const tabId = tabs[0].id;
+      const tabUrl = tabs[0].url || '';
 
-        if (!response) {
-          showToast('❌ No response from page. Refresh and try again.', 'error');
-          resetFillBtn();
-          return;
-        }
+      // Determine which content script to inject based on portal
+      const isROP = tabUrl.includes('rop.gov.om');
+      const scriptFile = isROP ? 'content_rop.js' : 'content_filler.js';
 
-        if (response.status === 'error') {
-          showToast(`❌ ${response.error || 'Fill failed'}`, 'error');
-          resetFillBtn();
-          return;
-        }
+      // Programmatically inject the content script to ensure it's loaded
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tabId },
+          files: [scriptFile],
+        });
+        console.log(`[VizEz Popup] Injected ${scriptFile} into tab ${tabId}`);
+      } catch (injectErr) {
+        console.warn('[VizEz Popup] Script injection failed:', injectErr.message);
+        showToast(`❌ Cannot access this page. Check extension permissions.`, 'error');
+        resetFillBtn();
+        return;
+      }
 
-        if (response.status === 'filling') {
-          // Phase 1 success — mark as filled, show progress
-          const msg = response.filled
-            ? `✅ ${response.filled} fields filled! Sponsor section loading...`
-            : '✅ Filling in progress...';
-          showToast(msg, 'success');
+      // Small delay to let the script initialize
+      setTimeout(() => {
+        chrome.tabs.sendMessage(tabId, { type: 'VIZEZ_AUTOFILL' }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.warn('[VizEz Popup] sendMessage error:', chrome.runtime.lastError.message);
+            showToast('❌ Page not responding. Refresh the portal page and try again.', 'error');
+            resetFillBtn();
+            return;
+          }
+
+          if (!response) {
+            showToast('❌ No response from page. Refresh and try again.', 'error');
+            resetFillBtn();
+            return;
+          }
+
+          if (response.status === 'error') {
+            showToast(`❌ ${response.error || 'Fill failed'}`, 'error');
+            resetFillBtn();
+            return;
+          }
+
+          if (response.status === 'filling') {
+            const msg = response.filled
+              ? `✅ ${response.filled} fields filled! Sponsor fields in 2s...`
+              : '✅ Filling in progress...';
+            showToast(msg, 'success');
+            app.status = 'filled';
+            chrome.storage.local.set({ vizezAddonData: addonData });
+            resetFillBtn();
+            renderDetail();
+            return;
+          }
+
+          // Generic success
+          showToast('✅ Fill complete!', 'success');
           app.status = 'filled';
           chrome.storage.local.set({ vizezAddonData: addonData });
           resetFillBtn();
           renderDetail();
-          return;
-        }
-
-        // Generic success
-        showToast('✅ Fill complete!', 'success');
-        app.status = 'filled';
-        chrome.storage.local.set({ vizezAddonData: addonData });
-        resetFillBtn();
-        renderDetail();
-      });
+        });
+      }, 200);
     });
   });
 }
