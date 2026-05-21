@@ -62,13 +62,13 @@ export async function GET(req: NextRequest) {
     const result: Record<string, unknown> = {};
 
     // Helper: run a section, silently skip if tables don't exist
-    async function safeSection(name: string, fn: () => Promise<void>) {
+    const safeSection = async (name: string, fn: () => Promise<void>) => {
       try {
         await fn();
       } catch (e) {
         console.warn(`Analytics section "${name}" failed:`, e);
       }
-    }
+    };
 
     // ─── OVERVIEW KPIs ───
     if (section === 'all' || section === 'overview') await safeSection('overview', async () => {
