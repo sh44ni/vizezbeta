@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { trackEvent } from '@/lib/analytics';
 
 export interface VizUser {
   name: string;
@@ -88,6 +89,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           day: todayKey(),
         }));
       } catch {}
+      
+      // Track login event
+      trackEvent('login', {
+        user_email: loggedIn.email,
+        user_name: loggedIn.name,
+        metadata: { role: loggedIn.role },
+      });
+      
       return { success: true };
     } catch {
       return { success: false, error: 'Network error. Please try again.' };
@@ -95,9 +104,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Track logout event before clearing user
+    if (user) {
+      trackEvent('logout', {
+        user_email: user.email,
+        user_name: user.name,
+      });
+    }
     setUser(null);
     try { localStorage.removeItem(STORAGE_KEY); } catch {}
-  }, []);
+  }, [user]);
 
   const isAdmin = user?.role === 'admin';
 
