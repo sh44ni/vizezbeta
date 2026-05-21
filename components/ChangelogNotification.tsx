@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Rocket, Blocks, ScanLine, Zap, BrainCircuit, Shield } from 'lucide-react';
+import { X, Rocket, Blocks, ScanLine, Zap, BrainCircuit } from 'lucide-react';
 
 // ─── v3.0.0 Open Beta — Launch version ───
 const CURRENT_VERSION = '3.0.0';
@@ -49,14 +49,6 @@ const FEATURES: Feature[] = [
       'Extract → Send to Portal → Fill. The entire flow from document scan to filled government form in under 10 seconds.',
     tag: 'Fast',
     tagColor: '#f59e0b',
-  },
-  {
-    icon: <Shield className="w-4 h-4" />,
-    title: 'Role-Based Access',
-    description:
-      'Super admin controls who can access what. Request addon access, manage users, and audit every action from one dashboard.',
-    tag: 'Secure',
-    tagColor: '#10b981',
   },
 ];
 
