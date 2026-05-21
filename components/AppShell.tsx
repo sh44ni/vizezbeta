@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Globe, Bot, ClipboardList,
   Settings, LogOut, ChevronLeft, ChevronRight,
-  Users,
+  Users, BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import ExtensionStatus from '@/components/ExtensionStatus';
