@@ -157,7 +157,7 @@ async function loadPortalList() {
   // Check on-page for addon portals too
   // ROP eVisa URL pattern
   const addonUrlPatterns = {
-    'rop-evisa': '*evisa.rop.gov.om*',
+    'rop-evisa': '*rop.gov.om*',
   };
   for (const entry of portalEntries) {
     if (entry.type === 'addon' && addonUrlPatterns[entry.id]) {

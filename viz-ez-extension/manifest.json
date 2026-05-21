@@ -29,7 +29,7 @@
       "run_at": "document_end"
     },
     {
-      "matches": ["*://evisa.rop.gov.om/*"],
+      "matches": ["*://rop.gov.om/*", "*://*.rop.gov.om/*"],
       "js": ["content_rop.js"],
       "run_at": "document_end"
     },
