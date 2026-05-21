@@ -31,7 +31,7 @@ pm2 save
 
 echo ""
 echo "✅ Deployment complete!"
-echo "   Frontend: http://localhost:3000"
+echo "   Frontend: http://localhost:3001"
 echo "   Backend:  http://localhost:4000"
 echo "   Live:     https://earlyaccess.vizez.cloud"
 echo ""
