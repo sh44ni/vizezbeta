@@ -1,312 +1,416 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ThemeProvider } from '@/context/ThemeContext';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
-import Sidebar from '@/components/Sidebar';
-import SettingsPanel from '@/components/SettingsPanel';
-import UploadScreen from '@/components/UploadScreen';
-import ExtractionScreen from '@/components/ExtractionScreen';
-import VisitVisaPromo from '@/components/VisitVisaPromo';
-import LetterGenerationScreen from '@/components/LetterGenerationScreen';
-import ManualVisaModule from '@/components/ManualVisaModule';
+import { useAuth } from '@/context/AuthContext';
+import AppShell from '@/components/AppShell';
 import LoginScreen from '@/components/LoginScreen';
-import LoadingScreen from '@/components/LoadingScreen';
-import UserManagement from '@/components/UserManagement';
-import PassportLogsPanel from '@/components/PassportLogsPanel';
 import MobileBlocker from '@/components/MobileBlocker';
 import ChangelogNotification from '@/components/ChangelogNotification';
-import { LogEntry, PassportItem } from './types';
+import SettingsPanel from '@/components/SettingsPanel';
+import UserManagement from '@/components/UserManagement';
+import PassportLogsPanel from '@/components/PassportLogsPanel';
+import Link from 'next/link';
+import {
+  Globe, Layers, Zap, TrendingUp, ArrowRight, Bot, Users, Inbox,
+} from 'lucide-react';
 
-const DEFAULT_LETTERHEAD = '';
-const DEFAULT_STAMP = '';
+/* ─── Types ─── */
+interface PortalData {
+  id: string;
+  name: string;
+  url_pattern: string;
+  status: string;
+  field_count: number | string;
+  manual_count: number | string;
+  updated_at: string;
+  created_at: string;
+}
 
-const VISIT_VISA_STEPS = ['Upload', 'Extract', 'Review', 'Generate'];
-const MANUAL_VISA_STEPS = ['Upload', 'Extract', 'Review'];
+interface ActivityItem {
+  time: string;
+  text: string;
+  detail: string;
+  type: 'success' | 'warn' | 'info';
+}
 
-const MODULE_META: Record<string, { title: string; subtitle: string }> = {
-  'visit-visa':  { title: 'Visit Visa', subtitle: 'Renewal letter generation' },
-  'manual-visa': { title: 'Manual Visa', subtitle: 'ROP eVisa portal' },
-};
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
-const LOADING_SESSION_KEY = 'vizez_loading_shown';
+function timeAgo(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return 'yesterday';
+  return `${days}d ago`;
+}
 
-function AppContent() {
+const STATUS_COLORS = {
+  success: '#4ade80',
+  warn: '#fbbf24',
+  info: 'rgba(255,255,255,0.35)',
+} as const;
+
+const BACKEND_URL = 'http://localhost:4000';
+
+function DashboardContent() {
   const { user } = useAuth();
-
-  // Loading screen — once per session
-  const [showLoading, setShowLoading] = useState(false);
-  const [loadingChecked, setLoadingChecked] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      const alreadyShown = sessionStorage.getItem(LOADING_SESSION_KEY);
-      if (!alreadyShown) {
-        setShowLoading(true);
-      }
-      setLoadingChecked(true);
-    }
-  }, [user]);
-
-  const handleLoadingComplete = useCallback(() => {
-    setShowLoading(false);
-    try { sessionStorage.setItem(LOADING_SESSION_KEY, '1'); } catch {}
-  }, []);
-
-  const [activeModule, setActiveModule] = useState('visit-visa');
-
-  // ── Visit Visa state ──
-  const [visitStep, setVisitStep] = useState<0 | 1 | 2 | 3 | 4>(0);
-  const [passports, setPassports] = useState<PassportItem[]>([]);
-  const [visitLogs, setVisitLogs] = useState<LogEntry[]>([]);
-
-  // ── Manual Visa state ──
-  const [manualLogs, setManualLogs] = useState<LogEntry[]>([]);
-  const [manualStep, setManualStep] = useState<1 | 2 | 3>(1);
-
-  // ── Global settings ──
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
-  const [letterheadSrc, setLetterheadSrc] = useState(DEFAULT_LETTERHEAD);
-  const [stampSrc, setStampSrc] = useState(DEFAULT_STAMP);
+
+  const [portals, setPortals] = useState<PortalData[]>([]);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [applicantCount, setApplicantCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    try {
+      // Fetch portals from backend
+      const portalsRes = await fetch(`${BACKEND_URL}/api/portals`);
+      if (portalsRes.ok) {
+        const portalsData = await portalsRes.json();
+        setPortals(portalsData.portals || []);
+      }
+
+      // Fetch passport logs for activity feed
+      const logsRes = await fetch(`${BACKEND_URL}/api/passport-logs?limit=10`);
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        const items: ActivityItem[] = (logsData.rows || []).map((log: { full_name: string; passport_number?: string; nationality?: string; processed_by?: string; processed_at: string }) => ({
+          time: timeAgo(log.processed_at),
+          text: `Passport processed — ${log.full_name}`,
+          detail: `${log.nationality || 'Unknown'} • ${log.passport_number || 'N/A'} • by ${log.processed_by || 'system'}`,
+          type: 'success' as const,
+        }));
+        setActivity(items);
+      }
+
+      // Fetch applicant count
+      const appRes = await fetch(`${BACKEND_URL}/api/applicants`);
+      if (appRes.ok) {
+        const appData = await appRes.json();
+        setApplicantCount(appData.applicants?.length || 0);
+      }
+    } catch (err) {
+      console.error('Dashboard data fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    try {
-      const lh = localStorage.getItem('vizez_letterhead');
-      const st = localStorage.getItem('vizez_stamp');
-      if (lh) setLetterheadSrc(lh);
-      if (st) setStampSrc(st);
-    } catch {}
-  }, []);
+    fetchData();
+  }, [fetchData]);
 
-  const addVisitLog = useCallback((level: LogEntry['level'], message: string) => {
-    const timestamp = new Date().toLocaleTimeString('en-GB', { hour12: false });
-    setVisitLogs((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, timestamp, level, message }]);
-  }, []);
+  const totalFields = portals.reduce((s, p) => s + Number(p.field_count || 0), 0);
 
-  const addManualLog = useCallback((level: LogEntry['level'], message: string) => {
-    const timestamp = new Date().toLocaleTimeString('en-GB', { hour12: false });
-    setManualLogs((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, timestamp, level, message }]);
-  }, []);
-
-  const handleVisitNext = () => setVisitStep((s) => Math.min(s + 1, 4) as 0 | 1 | 2 | 3 | 4);
-  const handleVisitPrev = () => setVisitStep((s) => Math.max(s - 1, 1) as 0 | 1 | 2 | 3 | 4);
-
-  const handleModuleChange = (id: string) => {
-    setActiveModule(id);
-    // Reset the module being left
-    if (id === 'visit-visa') {
-      setVisitStep(0);
-      setPassports([]);
-      setVisitLogs([]);
-    }
-    if (id === 'manual-visa') {
-      setManualStep(1);
-      setManualLogs([]);
-    }
+  const card: React.CSSProperties = {
+    background: '#0a0a0a',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '12px',
+    transition: 'border-color 0.15s ease',
   };
-
-  // Current step for sidebar tracker
-  const currentStep = activeModule === 'visit-visa' ? Math.max(visitStep, 1) : manualStep;
-  const currentStepLabels = activeModule === 'visit-visa' ? VISIT_VISA_STEPS : MANUAL_VISA_STEPS;
-  const meta = MODULE_META[activeModule] || MODULE_META['visit-visa'];
-
-  // If not logged in, show login screen
-  if (!user) {
-    return <LoginScreen />;
-  }
-
-  // If loading screen hasn't been checked yet, show nothing (prevents flash)
-  if (!loadingChecked) return null;
-
-  // If loading screen should show
-  if (showLoading) {
-    return <LoadingScreen onComplete={handleLoadingComplete} />;
-  }
 
   return (
     <>
-    {/* ── Changelog notification — once per version ── */}
-    <ChangelogNotification />
+      <ChangelogNotification />
+      <MobileBlocker />
 
-    {/* ── Mesh gradient background ── */}
-    <div className="mesh-bg">
-      <div className="mesh-bg-extra" />
-    </div>
-
-    <div style={{ display: 'flex', minHeight: '100vh', position: 'relative', zIndex: 1 }}>
-      {/* Sidebar */}
-      <Sidebar
-        activeModule={activeModule}
-        onModuleChange={handleModuleChange}
+      <AppShell
         onSettingsOpen={() => setSettingsOpen(true)}
         onAccessOpen={() => setAccessOpen(true)}
         onLogsOpen={() => setLogsOpen(true)}
-      />
-
-      {/* Main content */}
-      <main
-        style={{
-          flex: 1,
-          minWidth: 0,
-          height: '100vh',
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          position: 'sticky',
-          top: 0,
-        }}
       >
-        {/* Top bar — glass pill (hidden on promo) */}
-        {!(activeModule === 'visit-visa' && visitStep === 0) && <div
-          style={{
-            padding: '12px 32px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexShrink: 0,
-            background: 'var(--glass-bg)',
-            backdropFilter: 'blur(var(--glass-blur))',
-            WebkitBackdropFilter: 'blur(var(--glass-blur))',
-            borderBottom: '1px solid var(--glass-border)',
-            position: 'sticky',
-            top: 0,
-            zIndex: 10,
-          }}
-        >
-          <div>
-            <div style={{
-              fontSize: '14px',
-              fontWeight: 700,
-              fontFamily: "'Outfit', 'Inter', sans-serif",
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.3px',
-            }}>
-              {meta.title}
-            </div>
-            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '1px' }}>
-              {meta.subtitle}
-            </div>
-          </div>
+        <main style={{ flex: 1, overflowY: 'auto' }}>
+          <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '40px 32px 72px' }}>
 
-          {/* Step progress — capsule stepper */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '4px 6px',
-            borderRadius: '99px',
-            background: 'var(--surface-2)',
-            border: '1px solid var(--border)',
-          }}>
-            {currentStepLabels.map((label, i) => {
-              const stepNum = i + 1;
-              const isDone = currentStep > stepNum;
-              const isCurrent = currentStep === stepNum;
-              return (
-                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {/* ── Header ── */}
+            <div className="animate-card-appear" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '40px', flexWrap: 'wrap', gap: '16px' }}>
+              <div>
+                <h1 style={{
+                  fontSize: '28px',
+                  fontWeight: 700,
+                  margin: '0 0 6px',
+                  fontFamily: "'Outfit', 'Inter', sans-serif",
+                  letterSpacing: '-0.03em',
+                  color: '#ffffff',
+                }}>
+                  {getGreeting()}, {user?.name || 'there'}
+                </h1>
+                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.40)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#4ade80', display: 'inline-block' }} />
+                  {loading ? 'Loading...' : `${portals.length} portal${portals.length !== 1 ? 's' : ''} trained • ${totalFields} fields mapped`}
+                </p>
+              </div>
+              <Link
+                href="/dashboard/portals/new"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '7px',
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  background: '#7c5cfc',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#9b85ff'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#7c5cfc'; }}
+              >
+                <Bot size={14} /> Train New Portal
+              </Link>
+            </div>
+
+            {/* ── Metric Cards ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '28px' }}>
+              {[
+                { label: 'Portals Trained', value: loading ? '—' : String(portals.length), icon: <Globe size={14} />, sub: portals.filter(p => p.status === 'active').length + ' active' },
+                { label: 'Fields Mapped', value: loading ? '—' : String(totalFields), icon: <Layers size={14} />, sub: portals.length > 0 ? `avg ${Math.round(totalFields / portals.length)} per portal` : 'no portals yet' },
+                { label: 'Applicants', value: loading ? '—' : String(applicantCount), icon: <Users size={14} />, sub: 'total processed' },
+              ].map((stat, i) => (
+                <div
+                  key={stat.label}
+                  className="animate-card-appear"
+                  style={{ ...card, animationDelay: `${i * 0.07}s`, padding: '20px' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: 'rgba(255,255,255,0.40)' }}>
+                    {stat.icon}
+                    <span style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{stat.label}</span>
+                  </div>
                   <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '5px 12px',
-                    borderRadius: '99px',
-                    background: isCurrent ? 'var(--accent-subtle)' : 'transparent',
-                    border: isCurrent ? '1px solid var(--border-bright)' : '1px solid transparent',
-                    transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    fontSize: '32px',
+                    fontWeight: 700,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    color: '#ffffff',
+                    letterSpacing: '-0.03em',
+                    lineHeight: 1,
+                    marginBottom: '8px',
                   }}>
-                    <div
-                      style={{
-                        width: '20px', height: '20px', borderRadius: '50%',
-                        background: isDone ? 'var(--success)' : isCurrent ? 'var(--accent)' : 'var(--surface-3)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '9px', fontWeight: 700,
-                        color: isDone || isCurrent ? '#fff' : 'var(--text-muted)',
-                        transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                        boxShadow: isCurrent ? '0 0 12px rgba(124, 92, 252, 0.4)' : 'none',
-                      }}
-                    >
-                      {isDone ? '✓' : stepNum}
-                    </div>
-                    <span style={{
-                      fontSize: '11.5px',
-                      fontWeight: isCurrent ? 600 : 400,
-                      color: isCurrent ? 'var(--text-primary)' : isDone ? 'var(--text-secondary)' : 'var(--text-muted)',
-                      transition: 'all 0.3s ease',
-                    }}>
-                      {label}
-                    </span>
+                    {stat.value}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <TrendingUp size={11} style={{ color: 'rgba(255,255,255,0.30)' }} />
+                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.40)', fontWeight: 500 }}>{stat.sub}</span>
                   </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+
+            {/* ── Portals + Activity ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '16px', alignItems: 'start' }}>
+              {/* Active Portals */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <h2 style={{ fontSize: '13px', fontWeight: 600, margin: 0, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Active Portals
+                  </h2>
+                  <Link href="/dashboard/portals" style={{ fontSize: '12px', color: 'rgba(255,255,255,0.40)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '3px', transition: 'color 0.12s' }}
+                    onMouseEnter={e => { e.currentTarget.style.color = '#ffffff'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.40)'; }}
+                  >
+                    View all <ArrowRight size={12} />
+                  </Link>
+                </div>
+                <div style={{ ...card, overflow: 'hidden' }}>
+                  {loading ? (
+                    <div style={{ padding: '40px 18px', textAlign: 'center', color: 'rgba(255,255,255,0.30)', fontSize: '13px' }}>
+                      Loading portals...
+                    </div>
+                  ) : portals.length === 0 ? (
+                    <div style={{ padding: '40px 18px', textAlign: 'center' }}>
+                      <Inbox size={28} style={{ color: 'rgba(255,255,255,0.15)', marginBottom: '12px' }} />
+                      <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.35)', margin: '0 0 4px' }}>No portals trained yet</p>
+                      <Link href="/dashboard/portals/new" style={{ fontSize: '12px', color: '#7c5cfc', textDecoration: 'none' }}>
+                        Train your first portal →
+                      </Link>
+                    </div>
+                  ) : (
+                    portals.slice(0, 5).map((portal, i) => (
+                      <Link
+                        key={portal.id}
+                        href={`/dashboard/portals/${portal.id}`}
+                        className="animate-card-appear"
+                        style={{
+                          animationDelay: `${i * 0.06}s`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '14px',
+                          padding: '14px 18px',
+                          borderBottom: i < Math.min(portals.length, 5) - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                          textDecoration: 'none',
+                          color: 'inherit',
+                          transition: 'background 0.12s ease',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {portal.name}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', display: 'flex', gap: '10px' }}>
+                            <span>{portal.url_pattern}</span>
+                            <span>{portal.field_count} fields</span>
+                            <span>{timeAgo(portal.updated_at || portal.created_at)}</span>
+                          </div>
+                        </div>
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '99px',
+                          letterSpacing: '0.05em',
+                          textTransform: 'uppercase',
+                          ...(portal.status === 'active'
+                            ? { background: 'rgba(74,222,128,0.08)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.18)' }
+                            : { background: 'rgba(251,191,36,0.08)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.18)' }),
+                        }}>
+                          {portal.status === 'active' ? 'Active' : 'Needs Remap'}
+                        </span>
+                        <ArrowRight size={13} style={{ color: 'rgba(255,255,255,0.25)', flexShrink: 0 }} />
+                      </Link>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Activity Feed */}
+              <div>
+                <h2 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 12px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Recent Activity
+                </h2>
+                <div style={{ ...card, overflow: 'hidden' }}>
+                  {loading ? (
+                    <div style={{ padding: '40px 16px', textAlign: 'center', color: 'rgba(255,255,255,0.30)', fontSize: '13px' }}>
+                      Loading activity...
+                    </div>
+                  ) : activity.length === 0 ? (
+                    <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                      <Inbox size={24} style={{ color: 'rgba(255,255,255,0.15)', marginBottom: '8px' }} />
+                      <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.30)', margin: 0 }}>No recent activity</p>
+                    </div>
+                  ) : (
+                    activity.map((a, i) => (
+                      <div
+                        key={i}
+                        className="animate-card-appear"
+                        style={{
+                          animationDelay: `${i * 0.05}s`,
+                          display: 'flex',
+                          gap: '12px',
+                          padding: '12px 16px',
+                          borderBottom: i < activity.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                        }}
+                      >
+                        <div style={{
+                          width: '5px',
+                          height: '5px',
+                          borderRadius: '50%',
+                          marginTop: '7px',
+                          flexShrink: 0,
+                          background: STATUS_COLORS[a.type],
+                        }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '12px', fontWeight: 500, color: '#ffffff', lineHeight: 1.4 }}>
+                            {a.text}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginTop: '1px' }}>
+                            {a.detail} &bull; {a.time}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Quick Actions ── */}
+            <div style={{ marginTop: '24px' }}>
+              <h2 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 12px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Quick Actions
+              </h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                {[
+                  { label: 'Manual Entry',    desc: 'Upload & extract passport data',     icon: <Layers size={18} />, href: '/manual' },
+                  { label: 'Train Portal',    desc: 'Teach VizEz a new government form',  icon: <Bot size={18} />,   href: '/dashboard/portals/new' },
+                  { label: 'Portal Manager', desc: 'View and edit all trained portals',   icon: <Globe size={18} />, href: '/dashboard/portals' },
+                ].map((action, i) => (
+                  <Link
+                    key={action.label}
+                    href={action.href}
+                    className="animate-card-appear"
+                    style={{
+                      animationDelay: `${i * 0.07}s`,
+                      ...card,
+                      padding: '20px',
+                      textDecoration: 'none',
+                      color: 'inherit',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
+                  >
+                    <div style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      background: '#111111',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'rgba(255,255,255,0.60)',
+                    }}>
+                      {action.icon}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff', fontFamily: "'Outfit', sans-serif" }}>{action.label}</div>
+                      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.40)', marginTop: '2px' }}>{action.desc}</div>
+                    </div>
+                    <ArrowRight size={13} style={{ color: 'rgba(255,255,255,0.25)', marginTop: 'auto' }} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+
           </div>
-        </div>}
+        </main>
+      </AppShell>
 
-        {/* Step content */}
-        <div style={{ padding: '28px 32px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-          {/* ── Visit Visa ── */}
-          {activeModule === 'visit-visa' && (
-            <>
-              {visitStep === 0 && <VisitVisaPromo onGetStarted={() => setVisitStep(1)} />}
-              {visitStep === 1 && <UploadScreen passports={passports} setPassports={setPassports} onNext={handleVisitNext} />}
-              {visitStep === 2 && <ExtractionScreen passports={passports} setPassports={setPassports} logs={visitLogs} addLog={addVisitLog} onNext={handleVisitNext} onPrev={handleVisitPrev} isReview={false} />}
-              {visitStep === 3 && <ExtractionScreen passports={passports} setPassports={setPassports} logs={visitLogs} addLog={addVisitLog} onNext={handleVisitNext} onPrev={handleVisitPrev} isReview={true} />}
-              {visitStep === 4 && <LetterGenerationScreen passports={passports} onPrev={handleVisitPrev} letterheadSrc={letterheadSrc} stampSrc={stampSrc} />}
-            </>
-          )}
-
-          {/* ── Manual Visa ── */}
-          {activeModule === 'manual-visa' && (
-            <ManualVisaModule
-              logs={manualLogs}
-              addLog={addManualLog}
-              onStepChange={(s) => setManualStep(s as 1 | 2 | 3)}
-            />
-          )}
-        </div>
-      </main>
-
-      {/* Settings panel */}
       <SettingsPanel
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        letterheadSrc={letterheadSrc}
-        stampSrc={stampSrc}
-        onLetterheadChange={(src) => {
-          setLetterheadSrc(src);
-          try { localStorage.setItem('vizez_letterhead', src); } catch {}
-        }}
-        onStampChange={(src) => {
-          setStampSrc(src);
-          try { localStorage.setItem('vizez_stamp', src); } catch {}
-        }}
+        letterheadSrc=""
+        stampSrc=""
+        onLetterheadChange={() => {}}
+        onStampChange={() => {}}
       />
-
-      {/* User management panel (admin only) */}
-      <UserManagement
-        isOpen={accessOpen}
-        onClose={() => setAccessOpen(false)}
-      />
-
-      {/* Passport logs panel (admin only) */}
-      <PassportLogsPanel
-        isOpen={logsOpen}
-        onClose={() => setLogsOpen(false)}
-      />
-    </div>
+      <UserManagement isOpen={accessOpen} onClose={() => setAccessOpen(false)} />
+      <PassportLogsPanel isOpen={logsOpen} onClose={() => setLogsOpen(false)} />
     </>
   );
 }
 
 export default function Home() {
-  return (
-    <ThemeProvider>
-      <AuthProvider>
-        <MobileBlocker />
-        <AppContent />
-      </AuthProvider>
-    </ThemeProvider>
-  );
+  const { user } = useAuth();
+  if (!user) return <LoginScreen />;
+  return <DashboardContent />;
 }

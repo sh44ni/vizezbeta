@@ -184,7 +184,7 @@ export default function ExtractionScreen({ passports, setPassports, logs, addLog
               full_name: data.full_name,
               passport_number: data.passport_number,
               nationality: data.nationality,
-              processed_by: user?.name || user?.username || 'unknown',
+              processed_by: user?.name || user?.email || 'unknown',
             }),
           }).catch(() => {});
           success = true;

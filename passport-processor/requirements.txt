@@ -1,0 +1,17 @@
+# ── Web framework ────────────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9        # required for UploadFile / File()
+
+# ── Image processing ─────────────────────────────────────────────────────────
+opencv-python-headless>=4.9.0  # cv2 (headless = no GUI deps)
+numpy>=1.26.0
+
+# ── PDF handling ─────────────────────────────────────────────────────────────
+pymupdf>=1.24.0                # fitz – fast native PDF renderer
+pdf2image>=1.17.0              # poppler wrapper (optional fallback)
+pypdfium2>=4.27.0              # secondary fallback PDF renderer
+
+# ── MIME / magic-byte detection ──────────────────────────────────────────────
+filetype>=1.2.0                # pure-Python magic bytes, no native DLL needed
+                               # (replaces python-magic which requires libmagic.dll on Windows)

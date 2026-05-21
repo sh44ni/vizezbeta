@@ -50,7 +50,7 @@ function fetchAndFillData(btn) {
       const data = response ? response.payload : null;
       if (!data) { finish('No Data Found', false); return; }
 
-      console.log('VizEz AutoFill data:', data);
+      console.log('[VizEz ROP] AutoFill data received, fields:', Object.keys(data).length);
 
       try {
         let filled = 0;
@@ -71,10 +71,11 @@ function fetchAndFillData(btn) {
               return;
             }
           }
-          // 2) Fuzzy fallback — prefer opt.includes(t) only (not reverse, to avoid FEMALE matching MALE)
+          // 2) Fuzzy fallback — use startsWith (NOT includes!) to avoid
+          //    'FEMALE'.includes('MALE') = true trapping Male searches.
           for (let i = 0; i < select.options.length; i++) {
             const opt = select.options[i].text.toUpperCase().trim();
-            if (opt.includes(t) || (t.length > opt.length && t.includes(opt))) {
+            if (opt.startsWith(t) || (t.length > 3 && t.startsWith(opt))) {
               select.selectedIndex = i;
               select.dispatchEvent(new Event('change', { bubbles: true }));
               filled++;
@@ -113,7 +114,7 @@ function fetchAndFillData(btn) {
             try {
               window.jQuery(el).val(val).trigger('input').trigger('change');
               filled++;
-              console.log('VizEz: filled masked field', id, 'via jQuery.val()');
+              console.log('[VizEz ROP] filled masked field', id, 'via jQuery.val()');
               return;
             } catch (e) {
               console.warn('VizEz: jQuery.val() failed for', id, e);
@@ -134,7 +135,7 @@ function fetchAndFillData(btn) {
           el.dispatchEvent(new Event('change', { bubbles: true }));
           el.dispatchEvent(new Event('blur', { bubbles: true }));
           filled++;
-          console.log('VizEz: filled masked field', id, 'via key simulation');
+          console.log('[VizEz ROP] filled masked field', id, 'via key simulation');
         };
 
         // ── Global selects ────────────────────────────────────
@@ -169,24 +170,56 @@ function fetchAndFillData(btn) {
         // Mother's Name — we never have this data, so always use "MRS"
         fill('txtMotherName', 'MRS');
 
-        // Gender — use strict matching to avoid "FEMALE" matching "MALE"
-        let gender = (data.gender || '').toUpperCase().trim();
-        if (gender === 'M' || gender === 'MALE') {
-          gender = 'Male';
-        } else if (gender === 'F' || gender === 'FEMALE') {
-          gender = 'Female';
-        }
-        if (gender) {
+        // Gender — three-pass matching to handle any portal option format.
+        // IMPORTANT: 'FEMALE'.includes('MALE') === true, so we NEVER use .includes() for gender.
+        const rawGender = (data.gender || '').toUpperCase().trim();
+        const genderCode = (rawGender === 'M' || rawGender === 'MALE') ? 'M'
+                         : (rawGender === 'F' || rawGender === 'FEMALE') ? 'F' : '';
+        const genderWord = genderCode === 'M' ? 'MALE' : genderCode === 'F' ? 'FEMALE' : '';
+        console.log('[VizEz ROP] Gender resolve:', rawGender, '→', genderCode);
+
+        if (genderCode) {
           const genderSelect = document.getElementById('ddlGender');
           if (genderSelect) {
-            for (let i = 0; i < genderSelect.options.length; i++) {
-              if (genderSelect.options[i].text.toUpperCase().trim() === gender.toUpperCase()) {
+            let genderFilled = false;
+
+            // Pass 1: match by option VALUE attribute ('M' / 'F') — most reliable
+            for (let i = 0; !genderFilled && i < genderSelect.options.length; i++) {
+              if (genderSelect.options[i].value.toUpperCase().trim() === genderCode) {
                 genderSelect.selectedIndex = i;
                 genderSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                filled++;
-                break;
+                filled++; genderFilled = true;
+                console.log('[VizEz ROP] Gender set via VALUE match');
               }
             }
+
+            // Pass 2: exact text match (e.g. option text is 'Male' / 'Female')
+            for (let i = 0; !genderFilled && i < genderSelect.options.length; i++) {
+              if (genderSelect.options[i].text.toUpperCase().trim() === genderWord) {
+                genderSelect.selectedIndex = i;
+                genderSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                filled++; genderFilled = true;
+                console.log('[VizEz ROP] Gender set via TEXT match');
+              }
+            }
+
+            // Pass 3: startsWith match (e.g. 'Male (M)') — safe, avoids FEMALE matching MALE
+            for (let i = 0; !genderFilled && i < genderSelect.options.length; i++) {
+              const optText = genderSelect.options[i].text.toUpperCase().trim();
+              if (optText.startsWith(genderWord)) {
+                genderSelect.selectedIndex = i;
+                genderSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                filled++; genderFilled = true;
+                console.log('[VizEz ROP] Gender set via STARTSWITH match');
+              }
+            }
+
+            if (!genderFilled) {
+              console.warn('VizEz: Gender NOT filled — no option matched for code:', genderCode,
+                '| Available options:', Array.from(genderSelect.options).map(o => `"${o.text}" (val="${o.value}")`).join(', '));
+            }
+          } else {
+            console.warn('VizEz: ddlGender element not found on page.');
           }
         }
 
@@ -261,11 +294,7 @@ function createPreviewButtons(data) {
   const passportImg = data._passportImageUrl || '';
   const workPermitImg = data._workPermitImageUrl || '';
 
-  console.log('VizEz: createPreviewButtons — passport image:', passportImg ? passportImg.substring(0, 50) + '...' : '(none)');
-  console.log('VizEz: createPreviewButtons — work permit image:', workPermitImg ? workPermitImg.substring(0, 50) + '...' : '(none)');
-
   if (!passportImg && !workPermitImg) {
-    console.log('VizEz: No preview images available — skipping buttons');
     return;
   }
 
@@ -415,12 +444,9 @@ function buildOverlay(imgSrc, title) {
   return overlay;
 }
 
-// Only inject on the ROP portal
-if (
-  window.location.href.includes('rop.gov.om') ||
-  document.title.includes('ROYAL') ||
-  window.location.href.includes('manualvisapage')
-) {
-  createAutofillButton();
-}
+// Legacy ROP auto-fill button removed.
+// Fill is now handled by content_filler.js via portal mappings
+// and the extension popup's Fill tab.
+// The fetchAndFillData() function is still available if called
+// manually from the popup via VIZEZ_AUTOFILL message.
 

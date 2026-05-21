@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { enhancePassportImage } from '@/lib/passport-enhance';
 
 // ─────────────────────────────────────────────────────
 // PASSPORT KNOWLEDGE BASE — country-specific rules
@@ -44,6 +45,197 @@ function formatDDMMYYYY(d: Date): string {
 function yearsBetween(a: Date, b: Date): number {
   return Math.round((b.getTime() - a.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
 }
+
+// ─────────────────────────────────────────────────────
+// ICAO 9303 MRZ CHECK DIGIT VERIFICATION
+// ─────────────────────────────────────────────────────
+function mrzCheckDigit(input: string): number {
+  const weights = [7, 3, 1];
+  let sum = 0;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    let val: number;
+    if (ch === '<') val = 0;
+    else if (ch >= '0' && ch <= '9') val = parseInt(ch, 10);
+    else val = ch.charCodeAt(0) - 55; // A=10, B=11, ...Z=35
+    sum += val * weights[i % 3];
+  }
+  return sum % 10;
+}
+
+function verifyMRZField(data: string, expectedCheckDigit: string): boolean {
+  if (!/^\d$/.test(expectedCheckDigit)) return false;
+  return mrzCheckDigit(data) === parseInt(expectedCheckDigit, 10);
+}
+
+// Validate impossible calendar dates (Feb 30, Apr 31, etc.)
+function isValidCalendarDate(dd: number, mm: number, yyyy: number): boolean {
+  const d = new Date(yyyy, mm - 1, dd);
+  return d.getFullYear() === yyyy && d.getMonth() === mm - 1 && d.getDate() === dd;
+}
+
+// ─────────────────────────────────────────────────────
+// MRZ PARSER — deterministic, no LLM involved
+// ─────────────────────────────────────────────────────
+interface MRZParsed {
+  passportNumber: string | null;
+  nationality: string | null;
+  dob: Date | null;
+  expiry: Date | null;
+  gender: string | null;
+  surname: string | null;
+  givenNames: string | null;
+  // Checksum verification results
+  ppNumCheckOk: boolean | null;   // null = couldn't verify
+  dobCheckOk: boolean | null;
+  expiryCheckOk: boolean | null;
+  compositeCheckOk: boolean | null;
+  mrzQuality: 'VERIFIED' | 'PARTIAL' | 'FAILED' | 'UNREADABLE';
+}
+
+// MRZ country code → human-readable mapping (for matching PASSPORT_RULES)
+const MRZ_COUNTRY_MAP: Record<string, string> = {
+  NPL: 'NEPAL', IND: 'INDIA', BGD: 'BANGLADESH', LKA: 'SRI_LANKA',
+  PAK: 'PAKISTAN', PHL: 'PHILIPPINES', IDN: 'INDONESIA', ETH: 'ETHIOPIA',
+  EGY: 'EGYPT', UGA: 'UGANDA', KEN: 'KENYA', TZA: 'TANZANIA',
+  VNM: 'VIETNAM', MMR: 'MYANMAR', CMR: 'CAMEROON',
+};
+
+function parseMRZDate(yymmdd: string, isExpiry: boolean): Date | null {
+  if (!yymmdd || yymmdd.length !== 6 || !/^\d{6}$/.test(yymmdd)) return null;
+  const yy = parseInt(yymmdd.slice(0, 2), 10);
+  const mm = parseInt(yymmdd.slice(2, 4), 10);
+  const dd = parseInt(yymmdd.slice(4, 6), 10);
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+
+  // Century logic:
+  // - Expiry dates: almost always 20XX (passports don't expire in the 1900s)
+  // - DOB: if YY > current 2-digit year + 5, assume 19XX, else 20XX
+  let century: number;
+  if (isExpiry) {
+    century = 2000;
+  } else {
+    const currentYY = new Date().getFullYear() % 100;
+    century = yy > currentYY + 5 ? 1900 : 2000;
+  }
+
+  const d = new Date(century + yy, mm - 1, dd);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
+function parseMRZ(line1: string | undefined, line2: string | undefined): MRZParsed {
+  const result: MRZParsed = {
+    passportNumber: null, nationality: null,
+    dob: null, expiry: null, gender: null,
+    surname: null, givenNames: null,
+    ppNumCheckOk: null, dobCheckOk: null,
+    expiryCheckOk: null, compositeCheckOk: null,
+    mrzQuality: 'UNREADABLE',
+  };
+
+  // Clean lines: remove spaces, ensure uppercase
+  const l1 = (line1 || '').replace(/\s/g, '').toUpperCase();
+  const l2 = (line2 || '').replace(/\s/g, '').toUpperCase();
+
+  // Bail if lines look like [UNREADABLE] placeholders
+  if (l1.includes('UNREADABLE') || l2.includes('UNREADABLE')) {
+    return result;
+  }
+
+  // Line 1: P<CCCsurname<<givennames<<<
+  if (l1.length >= 10 && l1.startsWith('P')) {
+    const namesPart = l1.slice(5); // skip P + type + 3-letter country
+    const parts = namesPart.split('<<').filter(Boolean);
+    if (parts.length >= 1) {
+      result.surname = parts[0].replace(/</g, ' ').trim();
+    }
+    if (parts.length >= 2) {
+      result.givenNames = parts[1].replace(/</g, ' ').trim();
+    }
+  }
+
+  // Line 2 must be 44 chars for TD3 (passport) format
+  // But allow slightly shorter if trailing <'s were trimmed
+  if (l2.length >= 28) {
+    // ── Passport Number: positions 0-8, check digit at position 9 ──
+    const rawPpNum = l2.slice(0, 9);
+    const ppCheckChar = l2.charAt(9);
+    const ppNumClean = rawPpNum.replace(/</g, '');
+    if (ppNumClean.length > 0) {
+      result.passportNumber = ppNumClean;
+      result.ppNumCheckOk = verifyMRZField(rawPpNum, ppCheckChar);
+    }
+
+    // Positions 10-12: Nationality
+    const natCode = l2.slice(10, 13).replace(/</g, '');
+    if (natCode.length === 3) {
+      result.nationality = natCode;
+    }
+
+    // ── DOB: positions 13-18, check digit at position 19 ──
+    const dobRaw = l2.slice(13, 19);
+    const dobCheckChar = l2.charAt(19);
+    result.dob = parseMRZDate(dobRaw, false);
+    if (result.dob) {
+      result.dobCheckOk = verifyMRZField(dobRaw, dobCheckChar);
+      // Also check it's a valid calendar date
+      const dd = parseInt(dobRaw.slice(4, 6), 10);
+      const mm = parseInt(dobRaw.slice(2, 4), 10);
+      const yyyy = result.dob.getFullYear();
+      if (!isValidCalendarDate(dd, mm, yyyy)) {
+        result.dob = null;
+        result.dobCheckOk = false;
+      }
+    }
+
+    // Position 20: Sex
+    const sex = l2.charAt(20);
+    if (sex === 'M' || sex === 'F') {
+      result.gender = sex;
+    }
+
+    // ── Expiry: positions 21-26, check digit at position 27 ──
+    const expiryRaw = l2.slice(21, 27);
+    const expiryCheckChar = l2.charAt(27);
+    result.expiry = parseMRZDate(expiryRaw, true);
+    if (result.expiry) {
+      result.expiryCheckOk = verifyMRZField(expiryRaw, expiryCheckChar);
+      // Also check it's a valid calendar date
+      const dd = parseInt(expiryRaw.slice(4, 6), 10);
+      const mm = parseInt(expiryRaw.slice(2, 4), 10);
+      const yyyy = result.expiry.getFullYear();
+      if (!isValidCalendarDate(dd, mm, yyyy)) {
+        result.expiry = null;
+        result.expiryCheckOk = false;
+      }
+    }
+
+    // ── Composite check digit (position 43) over positions 0-9,13-19,21-27 ──
+    if (l2.length >= 44) {
+      const compositeInput = l2.slice(0, 10) + l2.slice(13, 20) + l2.slice(21, 28);
+      const compositeCheckChar = l2.charAt(43);
+      result.compositeCheckOk = verifyMRZField(compositeInput, compositeCheckChar);
+    }
+
+    // ── Determine overall MRZ quality ──
+    const checks = [result.ppNumCheckOk, result.dobCheckOk, result.expiryCheckOk];
+    const passed = checks.filter(c => c === true).length;
+    const failed = checks.filter(c => c === false).length;
+    if (failed > 0 && passed === 0) {
+      result.mrzQuality = 'FAILED';
+    } else if (passed === 3 || (passed >= 2 && result.compositeCheckOk === true)) {
+      result.mrzQuality = 'VERIFIED';
+    } else if (passed > 0) {
+      result.mrzQuality = 'PARTIAL';
+    } else {
+      result.mrzQuality = 'UNREADABLE';
+    }
+  }
+
+  return result;
+}
+
 
 // ─────────────────────────────────────────────────────
 // POST-EXTRACTION VALIDATOR
@@ -183,123 +375,74 @@ async function callVision(
 }
 
 // ─────────────────────────────────────────────────────
-// BUILD PASSPORT PROMPT — the expert-level prompt
+// BUILD PASSPORT PROMPT — MRZ-first extraction
 // ─────────────────────────────────────────────────────
 function buildPassportPrompt(): string {
-  return `You are a SENIOR passport OCR analyst with 20 years of experience processing passports for the Royal Oman Police eVisa portal. You process passports from Nepal, India, Bangladesh, Sri Lanka, Pakistan, Philippines, Indonesia, Ethiopia, Egypt, Uganda, Kenya, Tanzania, Vietnam, Myanmar, and other countries daily.
-
-Your job is to extract data with 100% accuracy. Before returning ANY field, you must REASON about whether the value makes sense.
+  return `You are a passport OCR specialist. Your #1 job is to COPY text from the passport image exactly as printed.
 
 ══════════════════════════════════════════
-STEP 1: READ THE MRZ FIRST
+PRIORITY 1: COPY THE MRZ LINES VERBATIM
 ══════════════════════════════════════════
-The Machine Readable Zone (MRZ) at the bottom of the passport is the MOST RELIABLE source.
-MRZ Line 1: P<COUNTRY_CODE<<SURNAME<<GIVEN<NAMES<<<<<<<<<<<<
-MRZ Line 2: PASSPORT_NO_CHECK_DOB_CHECK_SEX_EXPIRY_CHECK_...
+The two lines of text at the very bottom of the passport page are the Machine Readable Zone (MRZ).
+They look like this (44 characters each, using letters, digits, and < as filler):
 
-Decode MRZ Line 2 character positions (0-indexed):
-- Positions 0-8: Passport number (9 chars, may include a filler <)
-- Position 9: Passport number check digit
-- Positions 10-12: Nationality (3-letter country code)
-- Positions 13-18: Date of birth (YYMMDD)
-- Position 19: DOB check digit
-- Position 20: Sex (M or F)
-- Positions 21-26: Expiry date (YYMMDD)
-- Position 27: Expiry check digit
+Line 1: P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<
+Line 2: L898902C36UTO7408122F1204159ZE184226B<<<<<10
 
-ALWAYS cross-verify the printed (VIZ) fields against the MRZ. If they conflict, USE THE MRZ.
+YOUR TASK: Copy each MRZ line CHARACTER BY CHARACTER into mrz_line_1 and mrz_line_2.
+- Include every < character exactly as it appears
+- Do NOT decode, interpret, or modify the MRZ — just copy it raw
+- Each line should be exactly 44 characters (letters, digits, and < only)
+- If the MRZ is not visible or unreadable, return "[UNREADABLE]" for that line
 
 ══════════════════════════════════════════
-STEP 2: COUNTRY-SPECIFIC PASSPORT KNOWLEDGE
+PRIORITY 2: READ THE PRINTED (VIZ) FIELDS
 ══════════════════════════════════════════
-Apply these rules to VERIFY your extraction:
+Read the following from the PRINTED text area (above the MRZ):
+- Surname, given names: EXACTLY as printed, do not rearrange
+- Issue date: read EXACTLY as printed, convert to DD/MM/YYYY
+- Place of issue: read as printed
+- Passport country, nationality, city/country of birth: as printed
 
-NEPAL (NPL):
-- Passport validity: ALWAYS 10 years. If expiry - issue ≠ 10 years, re-read the dates.
-- Passport number: Old format = 8 digits. MRP format = 2 letters + 7 digits (e.g. "PA1234567"). Total 8-9 chars.
-- MRZ nationality code: NPL
-
-INDIA (IND):
-- Passport validity: ALWAYS 10 years (for adults over 18). Minors = 5 years.
-- Passport number: 1 uppercase letter + 7 digits (e.g. "T1234567"). Always exactly 8 chars.
-- MRZ nationality code: IND
-
-BANGLADESH (BGD):
-- Passport validity: 5 years (old MRP) or 10 years (e-passport, since ~2020).
-- Passport number: 2 letters + 7 digits (e.g. "BK0234567"). Always 9 chars.
-- MRZ nationality code: BGD
-
-SRI LANKA (LKA):
-- Passport validity: 10 years.
-- Passport number: 1 letter + 7 digits (e.g. "N1234567"). Always 8 chars.
-- MRZ nationality code: LKA
-
-PAKISTAN (PAK):
-- Passport validity: 5 years (old) or 10 years (new).
-- Passport number: 2 letters + 7 digits (e.g. "AB1234567"). Always 9 chars.
-- MRZ nationality code: PAK
-
-PHILIPPINES (PHL):
-- Passport validity: 5 or 10 years.
-- Passport number: 2 letters + 7 digits (e.g. "EC1234567") or varies. Typically 8-9 chars.
-- MRZ nationality code: PHL
-
-INDONESIA (IDN):
-- Passport validity: 5 years (old) or 10 years (since 2022).
-- Passport number: 1-2 letters + digits. Typically 8 chars.
-- MRZ nationality code: IDN
-
-ETHIOPIA (ETH):
-- Passport validity: 5 years.
-- Passport number: "EP" + 7 digits (e.g. "EP1234567"). Always 9 chars.
-- MRZ nationality code: ETH
-
-EGYPT (EGY):
-- Passport validity: 7 years.
-- Passport number: 1 letter + 7-8 digits. 8-9 chars total.
-- MRZ nationality code: EGY
-
-UGANDA (UGA): validity 10 years, passport 8-9 chars.
-KENYA (KEN): validity 10 years, passport 8-9 chars.
-TANZANIA (TZA): validity 5 or 10 years, passport 9 chars.
-VIETNAM (VNM): validity 10 years, 1 letter + 8 digits = 9 chars.
-MYANMAR (MMR): validity 5 years, 2 letters + 6 digits = 8 chars.
-
-══════════════════════════════════════════
-STEP 3: SELF-VERIFICATION CHECKLIST
-══════════════════════════════════════════
-Before outputting your JSON, verify EVERY field:
-
-□ PASSPORT NUMBER: Count the digits/letters. Does the character count match the expected format for this country?
-□ DATES: Are ALL dates in DD/MM/YYYY? Is expiry_date > issue_date? Does (expiry - issue) match the known validity period?
-□ DOB: Is the person's age reasonable (typically 18-60 for work visa applicants)?
-□ GENDER: Read from the passport Sex/Gender field AND verify against MRZ position 20. Return only "M" or "F".
-□ NAMES: Are the names copied EXACTLY as printed, character-for-character? Do NOT rearrange or modify them.
-□ NATIONALITY vs COUNTRY: These are read separately — nationality from the "Nationality" field, country from issuing authority.
+CRITICAL DATE RULES:
+- issue_date is NOT in the MRZ. Read it ONLY from the printed text.
+- If you cannot clearly read issue_date, return "[UNREADABLE]". Do NOT calculate or guess it.
+- For expiry_date and date_of_birth: read from printed text, convert to DD/MM/YYYY.
+- Do NOT invent, calculate, or guess ANY date. Every digit must come from the document.
+- For EACH date field, you MUST also return a confidence level:
+  "HIGH" = every digit is clearly legible
+  "MEDIUM" = some digits are partially obscured but you are fairly sure
+  "LOW" = you are uncertain about one or more digits, or inferring from context
 
 ══════════════════════════════════════════
 EXTRACTION RULES
 ══════════════════════════════════════════
-- Extract text EXACTLY as printed. Do NOT correct spelling of names.
+- Copy text EXACTLY as printed. Do NOT correct spelling of names.
 - ALL dates must be DD/MM/YYYY format.
-- Gender: exactly "M" or "F".
-- If a field is truly not visible or unreadable, return "[UNREADABLE]".
+- Gender: exactly "M" or "F" as printed in the Sex field.
+- If a field is truly not visible, return "[UNREADABLE]".
 - If a field does not exist on this passport type, return "".
-- NEVER guess or fabricate data. Every character must come from the document.
+- NEVER guess or fabricate. Every character must come from the document.
+- If you are not 100% sure of a date, set the confidence to LOW and we will verify it.
 
 Return ONLY a valid JSON object:
 {
+  "mrz_line_1": "full 44-char line 1 copied verbatim",
+  "mrz_line_2": "full 44-char line 2 copied verbatim",
   "surname": "family name exactly as printed",
   "first_name": "first given name exactly as printed",
   "second_name": "second given name or empty string",
   "third_name": "third given name or empty string",
-  "passport_number": "exact passport number after verification",
-  "issue_date": "DD/MM/YYYY",
+  "passport_number": "passport number as printed in the VIZ",
+  "issue_date": "DD/MM/YYYY from printed text ONLY",
+  "issue_date_confidence": "HIGH or MEDIUM or LOW",
   "place_of_issue": "issuing authority or city",
-  "expiry_date": "DD/MM/YYYY",
+  "expiry_date": "DD/MM/YYYY from printed text",
+  "expiry_date_confidence": "HIGH or MEDIUM or LOW",
   "passport_country": "issuing country",
   "nationality": "nationality as printed",
-  "date_of_birth": "DD/MM/YYYY",
+  "date_of_birth": "DD/MM/YYYY from printed text",
+  "dob_confidence": "HIGH or MEDIUM or LOW",
   "city_of_birth": "city of birth",
   "country_of_birth": "country of birth",
   "gender": "M or F"
@@ -411,6 +554,37 @@ Output ONLY the JSON. No explanation, no markdown fences.`;
 }
 
 // ─────────────────────────────────────────────────────
+// GENERIC DOCUMENT PROMPT — for unknown document types
+// ─────────────────────────────────────────────────────
+function buildGenericDocumentPrompt(docName: string): string {
+  return `You are an expert OCR specialist. Extract ALL text fields from this "${docName}" document image.
+
+EXTRACTION RULES:
+- Read every printed field label and its corresponding value.
+- Return fields as key-value pairs where the key is a snake_case version of the field label.
+- ALL dates must be converted to DD/MM/YYYY format.
+- Copy text EXACTLY as printed. Do NOT correct spelling.
+- If a field is not visible or unreadable, omit it entirely.
+- Numbers, IDs, codes: extract as-is with all digits.
+- Names: extract exactly as printed.
+- If the document is in Arabic, transliterate names to English capital letters but keep numbers as-is.
+
+Common fields to look for (include any you find):
+- full_name, first_name, surname, father_name
+- date_of_birth, gender, nationality, country
+- document_number, id_number, civil_id
+- issue_date, expiry_date, place_of_issue
+- address, phone_number, mobile_number
+- occupation, employer_name, sponsor_name
+- Any other fields visible on the document
+
+Return ONLY a valid JSON object with the extracted fields.
+Example: { "full_name": "JOHN DOE", "document_number": "AB123456", "expiry_date": "15/03/2030" }
+
+Output ONLY the JSON. No explanation, no markdown fences.`;
+}
+
+// ─────────────────────────────────────────────────────
 // MAIN ROUTE HANDLER
 // ─────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -421,20 +595,6 @@ export async function POST(req: NextRequest) {
 
   try {
     const formData = await req.formData();
-    const passportFile = formData.get('passport') as File | null;
-    const workPermitFile = formData.get('work_permit') as File | null;
-    const requestedModel = (formData.get('model') as string) || 'gpt-4o';
-
-    // Map frontend model IDs to actual API model names
-    const MODEL_MAP: Record<string, string> = {
-      'gpt-4o': 'gpt-4o',
-      // 'sonnet-4': 'claude-sonnet-4' — coming soon
-    };
-    const passportModel = MODEL_MAP[requestedModel] || 'gpt-4o';
-
-    if (!passportFile) {
-      return NextResponse.json({ error: 'No passport file provided.' }, { status: 400 });
-    }
 
     const toDataUrl = async (file: File) => {
       const buf = await file.arrayBuffer();
@@ -442,21 +602,243 @@ export async function POST(req: NextRequest) {
       return `data:${file.type || 'image/jpeg'};base64,${b64}`;
     };
 
-    // ── Extract passport ──
-    const passportDataUrl = await toDataUrl(passportFile);
-    const passportData = await callVision(apiKey, passportDataUrl, buildPassportPrompt(), 1200, passportModel);
+    // ── Check for new multi-document format (file_0, name_0, file_1, name_1...) ──
+    const file0 = formData.get('file_0') as File | null;
+    if (file0) {
+      // New dynamic multi-document path
+      const results: Record<string, Record<string, string>> = {};
+      let i = 0;
+      while (true) {
+        const file = formData.get(`file_${i}`) as File | null;
+        const name = formData.get(`name_${i}`) as string | null;
+        if (!file) break;
 
-    // ── Post-extraction validation ──
-    const validation = validatePassportData(passportData);
+        const docName = name || `Document ${i + 1}`;
+        console.log(`[extract-manual] Processing document ${i}: "${docName}" (${file.name}, ${(file.size / 1024).toFixed(0)} KB)`);
+
+        // Use specialized prompt for known document types
+        const docNameLower = docName.toLowerCase();
+        let extracted: Record<string, string>;
+
+        if (docNameLower === 'passport') {
+          // Full passport pipeline with MRZ + enhancement
+          const passportBuf = Buffer.from(await file.arrayBuffer());
+          const enhancement = await enhancePassportImage(
+            passportBuf, file.name, file.type || 'image/jpeg',
+          );
+          const passportDataUrl = enhancement.dataUrl;
+
+          const passportData = await callVision(apiKey, passportDataUrl, buildPassportPrompt(), 1500, 'gpt-4o');
+
+          // MRZ parsing + override
+          const mrz = parseMRZ(passportData.mrz_line_1, passportData.mrz_line_2);
+          const mrzOverrides: Record<string, string> = {};
+
+          if (mrz.dob && mrz.dobCheckOk === true) mrzOverrides.date_of_birth = formatDDMMYYYY(mrz.dob);
+          if (mrz.expiry && mrz.expiryCheckOk === true) mrzOverrides.expiry_date = formatDDMMYYYY(mrz.expiry);
+          if (mrz.gender) mrzOverrides.gender = mrz.gender;
+          if (mrz.passportNumber && mrz.ppNumCheckOk === true) mrzOverrides.passport_number = mrz.passportNumber;
+
+          const corrected = { ...passportData, ...mrzOverrides };
+          delete corrected.mrz_line_1;
+          delete corrected.mrz_line_2;
+          delete corrected.issue_date_confidence;
+          delete corrected.expiry_date_confidence;
+          delete corrected.dob_confidence;
+
+          // Validate
+          const validation = validatePassportData(corrected);
+          extracted = { ...corrected, ...validation.corrected };
+        } else if (docNameLower === 'work permit' || docNameLower === 'labor card') {
+          const dataUrl = await toDataUrl(file);
+          extracted = await callVision(apiKey, dataUrl, buildWorkPermitPrompt(), 800, 'gpt-4o');
+        } else {
+          // Generic document extraction
+          const dataUrl = await toDataUrl(file);
+          extracted = await callVision(apiKey, dataUrl, buildGenericDocumentPrompt(docName), 1000, 'gpt-4o');
+        }
+
+        // Clean: ensure all values are strings
+        const clean: Record<string, string> = {};
+        Object.entries(extracted).forEach(([k, v]) => {
+          if (v !== null && v !== undefined && String(v).trim() !== '' && !String(v).includes('UNREADABLE')) {
+            clean[k] = String(v);
+          }
+        });
+
+        results[docName] = clean;
+        i++;
+      }
+
+      if (Object.keys(results).length === 0) {
+        return NextResponse.json({ error: 'No documents provided.' }, { status: 400 });
+      }
+
+      return NextResponse.json(results);
+    }
+
+    // ── Legacy format: passport + optional work_permit ──
+    const passportFile = formData.get('passport') as File | null;
+    const workPermitFile = formData.get('work_permit') as File | null;
+    const requestedModel = (formData.get('model') as string) || 'gpt-4o';
+
+    const MODEL_MAP: Record<string, string> = {
+      'gpt-4o': 'gpt-4o',
+    };
+    const passportModel = MODEL_MAP[requestedModel] || 'gpt-4o';
+
+    if (!passportFile) {
+      return NextResponse.json({ error: 'No passport file provided.' }, { status: 400 });
+    }
+
+    // ── PASSPORT IMAGE ENHANCEMENT ──
+    const passportBuf = Buffer.from(await passportFile.arrayBuffer());
+    const enhancement = await enhancePassportImage(
+      passportBuf,
+      passportFile.name,
+      passportFile.type || 'image/jpeg',
+    );
+    const passportDataUrl = enhancement.dataUrl;
+
+    if (enhancement.wasEnhanced) {
+      console.log(`[extract-manual] ✓ Passport image enhanced before LLM extraction`);
+    } else {
+      console.log(`[extract-manual] ⚠ Using raw image (processor unavailable or failed)`);
+    }
+
+    // ── Extract passport ──
+    const passportData = await callVision(apiKey, passportDataUrl, buildPassportPrompt(), 1500, passportModel);
+
+    // ── MRZ OVERRIDE ──
+    const mrz = parseMRZ(passportData.mrz_line_1, passportData.mrz_line_2);
+    const mrzOverrides: Record<string, string> = {};
+    const mrzLog: string[] = [];
+    const fieldVerification: Record<string, 'MRZ_VERIFIED' | 'MRZ_PARTIAL' | 'LLM_HIGH' | 'LLM_MEDIUM' | 'LLM_LOW' | 'COMPUTED' | 'UNVERIFIED'> = {};
+
+    mrzLog.push(`📊 MRZ Quality: ${mrz.mrzQuality} | PP#✓=${mrz.ppNumCheckOk} | DOB✓=${mrz.dobCheckOk} | EXP✓=${mrz.expiryCheckOk} | Composite✓=${mrz.compositeCheckOk}`);
+
+    if (mrz.dob && mrz.dobCheckOk === true) {
+      const mrzDob = formatDDMMYYYY(mrz.dob);
+      if (passportData.date_of_birth !== mrzDob) mrzLog.push(`🔄 DOB: LLM said "${passportData.date_of_birth}" → MRZ CHECKSUM-VERIFIED "${mrzDob}"`);
+      mrzOverrides.date_of_birth = mrzDob;
+      fieldVerification.date_of_birth = 'MRZ_VERIFIED';
+    } else if (mrz.dob) {
+      const mrzDob = formatDDMMYYYY(mrz.dob);
+      const llmConf = (passportData.dob_confidence || 'HIGH').toUpperCase();
+      if (llmConf === 'LOW') {
+        mrzOverrides.date_of_birth = mrzDob;
+        fieldVerification.date_of_birth = 'MRZ_PARTIAL';
+      } else {
+        fieldVerification.date_of_birth = llmConf === 'HIGH' ? 'LLM_HIGH' : 'LLM_MEDIUM';
+      }
+    } else {
+      const llmConf = (passportData.dob_confidence || 'HIGH').toUpperCase();
+      fieldVerification.date_of_birth = llmConf === 'HIGH' ? 'LLM_HIGH' : llmConf === 'MEDIUM' ? 'LLM_MEDIUM' : 'LLM_LOW';
+    }
+
+    if (mrz.expiry && mrz.expiryCheckOk === true) {
+      const mrzExpiry = formatDDMMYYYY(mrz.expiry);
+      if (passportData.expiry_date !== mrzExpiry) mrzLog.push(`🔄 EXPIRY: LLM said "${passportData.expiry_date}" → MRZ CHECKSUM-VERIFIED "${mrzExpiry}"`);
+      mrzOverrides.expiry_date = mrzExpiry;
+      fieldVerification.expiry_date = 'MRZ_VERIFIED';
+    } else if (mrz.expiry) {
+      const mrzExpiry = formatDDMMYYYY(mrz.expiry);
+      const llmConf = (passportData.expiry_date_confidence || 'HIGH').toUpperCase();
+      if (llmConf === 'LOW') {
+        mrzOverrides.expiry_date = mrzExpiry;
+        fieldVerification.expiry_date = 'MRZ_PARTIAL';
+      } else {
+        fieldVerification.expiry_date = llmConf === 'HIGH' ? 'LLM_HIGH' : 'LLM_MEDIUM';
+      }
+    } else {
+      const llmConf = (passportData.expiry_date_confidence || 'HIGH').toUpperCase();
+      fieldVerification.expiry_date = llmConf === 'HIGH' ? 'LLM_HIGH' : llmConf === 'MEDIUM' ? 'LLM_MEDIUM' : 'LLM_LOW';
+    }
+
+    if (mrz.gender) {
+      if (passportData.gender !== mrz.gender) mrzLog.push(`🔄 GENDER: LLM said "${passportData.gender}" → MRZ says "${mrz.gender}"`);
+      mrzOverrides.gender = mrz.gender;
+      fieldVerification.gender = mrz.mrzQuality === 'VERIFIED' ? 'MRZ_VERIFIED' : 'MRZ_PARTIAL';
+    }
+
+    if (mrz.passportNumber && mrz.ppNumCheckOk === true) {
+      const vizPP = (passportData.passport_number || '').replace(/[\s-]/g, '');
+      if (vizPP !== mrz.passportNumber) mrzLog.push(`🔄 PP#: LLM said "${passportData.passport_number}" → MRZ CHECKSUM-VERIFIED "${mrz.passportNumber}"`);
+      mrzOverrides.passport_number = mrz.passportNumber;
+      fieldVerification.passport_number = 'MRZ_VERIFIED';
+    } else if (mrz.passportNumber) {
+      fieldVerification.passport_number = 'MRZ_PARTIAL';
+      mrzOverrides.passport_number = mrz.passportNumber;
+    }
+
+    // Issue date triple-check
+    const nat = mrz.nationality || '';
+    const countryKey = MRZ_COUNTRY_MAP[nat] || '';
+    const rules = countryKey ? PASSPORT_RULES[countryKey] : null;
+    const effectiveExpiry = mrz.expiry || parseDDMMYYYY(mrzOverrides.expiry_date || passportData.expiry_date);
+    const effectiveDob = mrz.dob || parseDDMMYYYY(mrzOverrides.date_of_birth || passportData.date_of_birth);
+    const vizIssue = parseDDMMYYYY(passportData.issue_date);
+    const issueConf = (passportData.issue_date_confidence || 'HIGH').toUpperCase();
+
+    let computedIssue: Date | null = null;
+    if (effectiveExpiry && rules && rules.validity.length === 1) {
+      computedIssue = new Date(effectiveExpiry);
+      computedIssue.setFullYear(computedIssue.getFullYear() - rules.validity[0]);
+    }
+
+    let issuePassesSanity = true;
+    if (vizIssue) {
+      const now = new Date();
+      if (vizIssue > now) issuePassesSanity = false;
+      if (effectiveExpiry && vizIssue >= effectiveExpiry) issuePassesSanity = false;
+      if (effectiveDob && vizIssue <= effectiveDob) issuePassesSanity = false;
+    }
+
+    if (vizIssue && issuePassesSanity && computedIssue) {
+      const diffDays = Math.abs(vizIssue.getTime() - computedIssue.getTime()) / (24 * 60 * 60 * 1000);
+      if (diffDays <= 35) {
+        fieldVerification.issue_date = issueConf === 'HIGH' ? 'LLM_HIGH' : 'LLM_MEDIUM';
+      } else if (mrz.expiryCheckOk === true) {
+        mrzOverrides.issue_date = formatDDMMYYYY(computedIssue);
+        fieldVerification.issue_date = 'COMPUTED';
+      } else if (issueConf === 'LOW') {
+        mrzOverrides.issue_date = formatDDMMYYYY(computedIssue);
+        fieldVerification.issue_date = 'COMPUTED';
+      } else {
+        fieldVerification.issue_date = issueConf === 'HIGH' ? 'LLM_HIGH' : 'LLM_MEDIUM';
+      }
+    } else if (!vizIssue && computedIssue) {
+      mrzOverrides.issue_date = formatDDMMYYYY(computedIssue);
+      fieldVerification.issue_date = 'COMPUTED';
+    } else if (vizIssue && !issuePassesSanity && computedIssue) {
+      mrzOverrides.issue_date = formatDDMMYYYY(computedIssue);
+      fieldVerification.issue_date = 'COMPUTED';
+    } else if (vizIssue && issuePassesSanity) {
+      fieldVerification.issue_date = issueConf === 'HIGH' ? 'LLM_HIGH' : issueConf === 'MEDIUM' ? 'LLM_MEDIUM' : 'LLM_LOW';
+    } else {
+      fieldVerification.issue_date = 'UNVERIFIED';
+    }
+
+    const mrzCorrected = { ...passportData, ...mrzOverrides };
+    delete mrzCorrected.mrz_line_1;
+    delete mrzCorrected.mrz_line_2;
+    delete mrzCorrected.issue_date_confidence;
+    delete mrzCorrected.expiry_date_confidence;
+    delete mrzCorrected.dob_confidence;
+
+    if (mrzLog.length > 0) {
+      console.log('VizEz MRZ Override Log:');
+      mrzLog.forEach(l => console.log('  ', l));
+    }
+
+    const validation = validatePassportData(mrzCorrected);
     if (validation.warnings.length > 0) {
       console.log('VizEz Passport Validation Warnings:');
       validation.warnings.forEach(w => console.log('  ', w));
     }
 
-    // Apply auto-corrections (e.g. expiry date recalculated from country rules)
-    const correctedPassport = { ...passportData, ...validation.corrected };
+    const correctedPassport = { ...mrzCorrected, ...validation.corrected };
 
-    // ── Extract work permit ──
     let workPermitData = null;
     if (workPermitFile) {
       const wpDataUrl = await toDataUrl(workPermitFile);
@@ -466,7 +848,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       passportData: correctedPassport,
       workPermitData,
-      _validation: validation.warnings, // expose warnings to frontend
+      _validation: validation.warnings,
+      _mrzOverrides: mrzLog,
+      _fieldVerification: fieldVerification,
+      _mrzQuality: mrz.mrzQuality,
+      _enhancement: enhancement.wasEnhanced
+        ? {
+            enhanced: true,
+            sourceFormat: enhancement.metrics?.sourceFormat,
+            readyForExtraction: enhancement.metrics?.readyForExtraction,
+            originalQuality: enhancement.metrics?.originalQuality,
+            enhancedQuality: enhancement.metrics?.enhancedQuality,
+            metadata: enhancement.metrics?.enhancementMetadata,
+            enhancedImageUrl: enhancement.dataUrl,
+          }
+        : { enhanced: false },
     });
   } catch (error) {
     const err = error as Error;
@@ -474,3 +870,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err.message || 'Unknown server error.' }, { status: 500 });
   }
 }
+

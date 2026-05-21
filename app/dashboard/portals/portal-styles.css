@@ -1,0 +1,434 @@
+/* ══════════════════════════════════════════════════
+   PORTAL MAPPING — Monochrome OLED Styles
+══════════════════════════════════════════════════ */
+
+/* ── Field Card Transitions ── */
+@keyframes field-enter {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes field-exit {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(-10px) scale(0.98); }
+}
+.field-card-enter {
+  animation: field-enter 0.28s ease-out forwards;
+}
+.field-card-exit {
+  animation: field-exit 0.18s ease-out forwards;
+}
+
+/* ── Confidence Dots ── */
+.confidence-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.confidence-dot--high   { background: var(--success); }
+.confidence-dot--medium { background: var(--warn); }
+.confidence-dot--low    { background: var(--error); }
+
+/* ── Skeleton Loading ── */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Keyboard Hint Badge ── */
+.kbd-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+/* ── Portal Status Badges — monochrome with colored dot ── */
+.portal-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+.portal-status--active {
+  border-color: rgba(74, 222, 128, 0.20);
+  color: var(--success);
+  background: var(--success-bg);
+}
+.portal-status--needs_remap {
+  border-color: rgba(251, 191, 36, 0.20);
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+.portal-status--in_progress {
+  border-color: rgba(96, 165, 250, 0.20);
+  color: var(--info);
+  background: var(--info-bg);
+}
+
+/* ── Portal Card ── */
+.portal-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  transition: border-color 0.15s ease;
+}
+.portal-card:hover {
+  border-color: var(--border-bright);
+}
+
+/* ── Field Row ── */
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s ease;
+}
+.field-row:last-child {
+  border-bottom: none;
+}
+.field-row:hover {
+  background: var(--surface-2);
+}
+
+/* ── Field Review Panel ── */
+.field-review-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* ── Mapping Line ── */
+.mapping-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 0;
+}
+
+/* ── Tab bar (underline style) ── */
+.portal-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+}
+.portal-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease, border-bottom-color 0.15s ease;
+  white-space: nowrap;
+  margin-bottom: -1px;
+}
+.portal-tab:hover {
+  color: var(--text-primary);
+}
+.portal-tab--active {
+  border-bottom-color: var(--accent);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ── Portal Detail header ── */
+.portal-detail-header {
+  padding: 28px 32px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Stats strip ── */
+.stats-strip {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border);
+}
+.stats-strip-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stats-strip-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+}
+.stats-strip-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Action Button row ── */
+.portal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Empty state ── */
+.portal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 32px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* ── Source badge ── */
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* ── Step labels ── */
+.step-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+}
+.step-label--active {
+  color: var(--text-primary);
+}
+
+/* ── Dot Menu ── */
+.dot-menu-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: transparent;
+  cursor: pointer;
+  color: rgba(255,255,255,0.40);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.dot-menu-btn:hover {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.80);
+}
+.dot-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: #111111;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 100;
+  min-width: 140px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.70);
+}
+.dot-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.70);
+  font-size: 13px;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.10s ease, color 0.10s ease;
+  text-align: left;
+}
+.dot-menu-item:hover {
+  background: rgba(255,255,255,0.06);
+  color: #ffffff;
+}
+.dot-menu-item--danger {
+  color: #f87171;
+}
+.dot-menu-item--danger:hover {
+  background: rgba(248,113,113,0.08);
+  color: #f87171;
+}
+
+/* ── Filter Tabs ── */
+.filter-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #0a0a0a;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 3px;
+}
+.filter-tab {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  white-space: nowrap;
+}
+.filter-tab:hover {
+  color: rgba(255,255,255,0.80);
+}
+.filter-tab--active {
+  background: #1a1a1a;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* ── Mapping Table ── */
+.mapping-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.mapping-table th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.40);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: #0a0a0a;
+  white-space: nowrap;
+}
+.mapping-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  vertical-align: middle;
+  color: rgba(255,255,255,0.80);
+}
+.mapping-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.mapping-table tbody tr:hover td {
+  background: rgba(255,255,255,0.02);
+}
+
+/* ── Portal top nav ── */
+.portal-topnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 56px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: #000000;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+/* ── Source Modal ── */
+.source-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.70);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.source-modal {
+  background: #0a0a0a;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.80);
+  max-height: 80vh;
+}
+.source-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  transition: background 0.10s ease;
+}
+.source-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+/* ── Confidence sliver (progress bar under field) ── */
+.confidence-sliver {
+  height: 2px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.confidence-sliver-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.confidence-sliver-fill--high   { background: var(--success); }
+.confidence-sliver-fill--medium { background: var(--warn); }
+.confidence-sliver-fill--low    { background: var(--error); }

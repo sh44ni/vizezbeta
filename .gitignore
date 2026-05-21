@@ -1,13 +1,10 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.js
 .yarn/install-state.gz
-
-# testing
-/coverage
+__pycache__/
+*.pyc
 
 # next.js
 /.next/
@@ -19,13 +16,17 @@
 # misc
 .DS_Store
 *.pem
+Thumbs.db
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
+# env files — NEVER commit secrets
+.env
+.env.local
+.env.production
 .env*.local
 
 # vercel
@@ -41,7 +42,10 @@ extract_pdf.py
 output.txt
 build.log
 *.pdf
-*.mp4
 /test/
 /portalsorucecode/
 /src/
+
+# build artifacts
+vizez-extension-v1.2.0.zip
+vizez-brain-extension-v3.zip

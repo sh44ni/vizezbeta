@@ -2,176 +2,109 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-/* ─── Types ─── */
 export interface VizUser {
   name: string;
-  username: string;
+  email: string;
   role: 'admin' | 'user';
 }
 
 interface AuthContextValue {
   user: VizUser | null;
   isAdmin: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
+  requestOtp: (email: string) => Promise<{ success: boolean; error?: string }>;
+  verifyOtp: (email: string, code: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  users: VizUser[];
-  refreshUsers: () => Promise<void>;
-  addUser: (u: { name: string; username: string; password: string }) => Promise<boolean>;
-  deleteUser: (username: string) => Promise<void>;
 }
 
-/* ─── Hardcoded fallback admin (used when DB is unreachable) ─── */
-const FALLBACK_ADMIN: VizUser = { name: 'Zeeshan', username: 'zee', role: 'admin' };
-const FALLBACK_ADMIN_PW = 'zee431#';
-
-const STORAGE_KEY_SESSION = 'vizez_session';
+const STORAGE_KEY = 'vizez_session';
 
 function todayKey(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/* ─── Context ─── */
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   isAdmin: false,
-  login: async () => false,
+  requestOtp: async () => ({ success: false }),
+  verifyOtp: async () => ({ success: false }),
   logout: () => {},
-  users: [],
-  refreshUsers: async () => {},
-  addUser: async () => false,
-  deleteUser: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [users, setUsers] = useState<VizUser[]>([]);
   const [user, setUser] = useState<VizUser | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
-  // Fetch users from DB
-  const refreshUsers = useCallback(async () => {
+  // Hydrate session from localStorage
+  useEffect(() => {
     try {
-      const res = await fetch('/api/users');
-      const data = await res.json();
-      if (data.users) {
-        setUsers(data.users.map((u: Record<string, string>) => ({
-          name: u.name,
-          username: u.username,
-          role: u.role as 'admin' | 'user',
-        })));
+      const sess = localStorage.getItem(STORAGE_KEY);
+      if (sess) {
+        const parsed = JSON.parse(sess);
+        if (parsed.day === todayKey()) {
+          setUser({ name: parsed.name, email: parsed.email, role: parsed.role });
+        } else {
+          localStorage.removeItem(STORAGE_KEY);
+        }
       }
+    } catch {}
+    setHydrated(true);
+  }, []);
+
+  const requestOtp = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/auth/request-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { success: false, error: data.error || 'Failed to send code' };
+      return { success: true };
     } catch {
-      // If DB unreachable, ensure at least the admin is available
-      setUsers([FALLBACK_ADMIN]);
+      return { success: false, error: 'Network error. Please try again.' };
     }
   }, []);
 
-  // Hydrate: restore session + load users
-  useEffect(() => {
-    const init = async () => {
-      await refreshUsers();
-
-      // Check for existing session
-      try {
-        const sess = localStorage.getItem(STORAGE_KEY_SESSION);
-        if (sess) {
-          const parsed = JSON.parse(sess) as { username: string; name: string; role: string; day: string };
-          if (parsed.day === todayKey()) {
-            setUser({ name: parsed.name, username: parsed.username, role: parsed.role as 'admin' | 'user' });
-          } else {
-            localStorage.removeItem(STORAGE_KEY_SESSION);
-          }
-        }
-      } catch {}
-      setHydrated(true);
-    };
-    init();
-  }, [refreshUsers]);
-
-  // Login via DB API
-  const login = useCallback(async (username: string, password: string): Promise<boolean> => {
+  const verifyOtp = useCallback(async (email: string, code: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const res = await fetch('/api/users', {
+      const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'login', username, password }),
+        body: JSON.stringify({ email, code }),
       });
       const data = await res.json();
-      if (data.user) {
-        const loggedIn: VizUser = {
-          name: data.user.name,
-          username: data.user.username,
-          role: data.user.role as 'admin' | 'user',
-        };
-        setUser(loggedIn);
-        try {
-          localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify({
-            username: loggedIn.username,
-            name: loggedIn.name,
-            role: loggedIn.role,
-            day: todayKey(),
-          }));
-        } catch {}
-        return true;
-      }
+      if (!res.ok) return { success: false, error: data.error || 'Verification failed' };
+      
+      const loggedIn: VizUser = {
+        name: data.user.name,
+        email: data.user.email,
+        role: data.user.role,
+      };
+      setUser(loggedIn);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          ...loggedIn,
+          day: todayKey(),
+        }));
+      } catch {}
+      return { success: true };
     } catch {
-      // Fallback: if DB is down, allow admin login with hardcoded creds
-      if (username === FALLBACK_ADMIN.username && password === FALLBACK_ADMIN_PW) {
-        setUser(FALLBACK_ADMIN);
-        try {
-          localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify({
-            username: FALLBACK_ADMIN.username,
-            name: FALLBACK_ADMIN.name,
-            role: FALLBACK_ADMIN.role,
-            day: todayKey(),
-          }));
-        } catch {}
-        return true;
-      }
+      return { success: false, error: 'Network error. Please try again.' };
     }
-    return false;
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
-    try { localStorage.removeItem(STORAGE_KEY_SESSION); } catch {}
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
   }, []);
-
-  // Add user via DB API
-  const addUser = useCallback(async (u: { name: string; username: string; password: string }): Promise<boolean> => {
-    try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', ...u }),
-      });
-      const data = await res.json();
-      if (data.error) return false;
-      await refreshUsers();
-      return true;
-    } catch {
-      return false;
-    }
-  }, [refreshUsers]);
-
-  // Delete user via DB API
-  const deleteUser = useCallback(async (username: string) => {
-    try {
-      await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', username }),
-      });
-      await refreshUsers();
-    } catch {}
-  }, [refreshUsers]);
 
   const isAdmin = user?.role === 'admin';
 
   if (!hydrated) return null;
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, login, logout, users, refreshUsers, addUser, deleteUser }}>
+    <AuthContext.Provider value={{ user, isAdmin, requestOtp, verifyOtp, logout }}>
       {children}
     </AuthContext.Provider>
   );
