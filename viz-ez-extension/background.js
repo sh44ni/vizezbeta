@@ -129,6 +129,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // ── FILL COMPLETE (from content_rop.js after phase 2) ──
+  if (message.type === 'FILL_COMPLETE') {
+    console.log(`VizEz: Fill complete! ${message.filled} fields filled (Phase 1: ${message.phase1})`);
+    return false;
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // API MODE — Popup communicates with backend
   // ═══════════════════════════════════════════════════════════════

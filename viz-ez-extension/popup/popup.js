@@ -341,19 +341,111 @@ function doFill() {
   const app = applicants[fillIdx];
   if (!app) return;
 
+  const fillBtn = $('#btn-detail-fill');
+  fillBtn.disabled = true;
+  fillBtn.textContent = '⏳ Filling...';
+  fillBtn.style.background = 'var(--warn)';
+  fillBtn.style.color = '#000';
+
   // Load data into legacy storage for content scripts
   chrome.storage.local.set({ vizezPassportData: app.data }, () => {
     // Trigger fill on active tab
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.tabs.sendMessage(tabs[0].id, { type: 'VIZEZ_AUTOFILL' });
+      if (!tabs[0]?.id) {
+        showToast('❌ No active tab found', 'error');
+        resetFillBtn();
+        return;
       }
+
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'VIZEZ_AUTOFILL' }, (response) => {
+        if (chrome.runtime.lastError) {
+          // Content script not loaded — probably not on the right page
+          showToast('❌ Not on portal page. Navigate to the portal first.', 'error');
+          resetFillBtn();
+          return;
+        }
+
+        if (!response) {
+          showToast('❌ No response from page. Refresh and try again.', 'error');
+          resetFillBtn();
+          return;
+        }
+
+        if (response.status === 'error') {
+          showToast(`❌ ${response.error || 'Fill failed'}`, 'error');
+          resetFillBtn();
+          return;
+        }
+
+        if (response.status === 'filling') {
+          // Phase 1 success — mark as filled, show progress
+          const msg = response.filled
+            ? `✅ ${response.filled} fields filled! Sponsor section loading...`
+            : '✅ Filling in progress...';
+          showToast(msg, 'success');
+          app.status = 'filled';
+          chrome.storage.local.set({ vizezAddonData: addonData });
+          resetFillBtn();
+          renderDetail();
+          return;
+        }
+
+        // Generic success
+        showToast('✅ Fill complete!', 'success');
+        app.status = 'filled';
+        chrome.storage.local.set({ vizezAddonData: addonData });
+        resetFillBtn();
+        renderDetail();
+      });
     });
-    // Mark as filled
-    app.status = 'filled';
-    chrome.storage.local.set({ vizezAddonData: addonData });
-    renderDetail();
   });
+}
+
+function resetFillBtn() {
+  const fillBtn = $('#btn-detail-fill');
+  fillBtn.disabled = false;
+  fillBtn.style.background = '';
+  fillBtn.style.color = '';
+  const applicants = getApplicants();
+  const app = applicants[fillIdx];
+  fillBtn.textContent = `▶  Fill ${app?.name || 'Applicant'}`;
+}
+
+// ── Toast notification ──
+function showToast(message, type = 'info') {
+  // Remove existing toast
+  const old = $('#vizez-toast');
+  if (old) old.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'vizez-toast';
+  const bgColor = type === 'success' ? 'rgba(5,150,105,0.95)'
+                : type === 'error'   ? 'rgba(220,38,38,0.95)'
+                : 'rgba(124,92,252,0.95)';
+  toast.style.cssText = `
+    position: fixed; bottom: 12px; left: 12px; right: 12px;
+    padding: 10px 14px; border-radius: 10px;
+    background: ${bgColor}; color: #fff;
+    font-size: 11px; font-weight: 600;
+    z-index: 999; text-align: center;
+    animation: toast-in 0.2s ease;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  `;
+  toast.textContent = message;
+
+  // Add animation
+  const style = document.createElement('style');
+  style.textContent = '@keyframes toast-in { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }';
+  toast.appendChild(style);
+
+  document.body.appendChild(toast);
+
+  // Auto remove after 4s
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
 }
 
 $('#btn-detail-fill').addEventListener('click', doFill);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VizEz Brain",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Scan government visa portals, map form fields to passport and work-permit data, and auto-fill in one click.",
   "permissions": [
     "storage",
@@ -26,6 +26,11 @@
     {
       "matches": ["*://viz-ez.com/*", "*://*.viz-ez.com/*", "*://vizez.vercel.app/*", "*://earlyaccess.vizez.cloud/*", "*://*.vizez.cloud/*", "http://localhost:3000/*"],
       "js": ["content_vizez.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["*://evisa.rop.gov.om/*"],
+      "js": ["content_rop.js"],
       "run_at": "document_end"
     },
     {

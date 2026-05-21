@@ -444,9 +444,164 @@ function buildOverlay(imgSrc, title) {
   return overlay;
 }
 
-// Legacy ROP auto-fill button removed.
-// Fill is now handled by content_filler.js via portal mappings
-// and the extension popup's Fill tab.
-// The fetchAndFillData() function is still available if called
-// manually from the popup via VIZEZ_AUTOFILL message.
+// ── Listen for VIZEZ_AUTOFILL from popup ──
+// This allows the portal-centric popup to trigger the ROP filler
+try {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type === 'VIZEZ_AUTOFILL') {
+      console.log('[VizEz ROP] VIZEZ_AUTOFILL received from popup');
+      
+      try {
+        chrome.runtime.sendMessage({ type: 'GET_VIZEZ_DATA' }, (response) => {
+          if (chrome.runtime.lastError) {
+            sendResponse({ status: 'error', error: 'Extension error: ' + chrome.runtime.lastError.message });
+            return;
+          }
 
+          const data = response ? response.payload : null;
+          if (!data) {
+            sendResponse({ status: 'error', error: 'No data in storage. Send data from VizEz first.' });
+            return;
+          }
+
+          console.log('[VizEz ROP] Filling with', Object.keys(data).length, 'fields');
+
+          try {
+            let filled = 0;
+
+            // Helpers (same as fetchAndFillData)
+            const setSelect = (id, text) => {
+              if (!text) return;
+              const select = document.getElementById(id);
+              if (!select) return;
+              const t = text.toUpperCase().trim();
+              for (let i = 0; i < select.options.length; i++) {
+                const opt = select.options[i].text.toUpperCase().trim();
+                if (opt === t) { select.selectedIndex = i; select.dispatchEvent(new Event('change', { bubbles: true })); filled++; return; }
+              }
+              for (let i = 0; i < select.options.length; i++) {
+                const opt = select.options[i].text.toUpperCase().trim();
+                if (opt.startsWith(t) || (t.length > 3 && t.startsWith(opt))) { select.selectedIndex = i; select.dispatchEvent(new Event('change', { bubbles: true })); filled++; return; }
+              }
+            };
+
+            const fill = (id, val) => {
+              if (!val) return;
+              const el = document.getElementById(id);
+              if (!el) return;
+              val = String(val).trim();
+              const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+              if (descriptor && descriptor.set) { descriptor.set.call(el, val); } else { el.value = val; }
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+              filled++;
+            };
+
+            const fillMasked = (id, val) => {
+              if (!val) return;
+              const el = document.getElementById(id);
+              if (!el) return;
+              val = String(val).trim();
+              if (window.jQuery) {
+                try { window.jQuery(el).val(val).trigger('input').trigger('change'); filled++; return; } catch {}
+              }
+              el.focus(); el.value = '';
+              for (const ch of val) {
+                el.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+                el.dispatchEvent(new KeyboardEvent('keypress', { key: ch, bubbles: true }));
+                el.value += ch;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new KeyboardEvent('keyup', { key: ch, bubbles: true }));
+              }
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+              filled++;
+            };
+
+            // Phase 1: Fill passport + applicant fields
+            setSelect('ddlmode', 'New Visa');
+            setSelect('ddlVisaType', 'HOUSE WORKERS');
+            const chk = document.getElementById('chkPrevVisa');
+            if (chk && chk.checked) { chk.click(); filled++; }
+
+            let pno = (data.passportNumber || data.passport_number || '').replace(/[^A-Z0-9]/ig, '');
+            fill('txtPassportNo', pno);
+            fill('txtIssueDate', data.issueDate || data.issue_date || '');
+            fill('txtExpiryDate', data.expiryDate || data.expiry_date || '');
+            let poi = data.placeOfIssue || data.place_of_issue || '';
+            if (poi.includes(',')) poi = poi.split(',')[0].trim();
+            fill('txtPlaceOfIssue', poi || 'N/A');
+
+            const nat = data.nationality || data.country || data.passport_country || '';
+            setSelect('ddlIssueCountry', nat);
+            setSelect('ddlNationality', nat);
+
+            fill('txtSurname', data.surname || '');
+            fill('txtFirstName', data.first_name || data.firstName || '');
+            fill('txtSecondName', data.second_name || data.secondName || '');
+            fill('txtThirdName', data.third_name || data.thirdName || '');
+            fill('txtMotherName', 'MRS');
+
+            // Gender
+            const rawGender = (data.gender || '').toUpperCase().trim();
+            const genderCode = (rawGender === 'M' || rawGender === 'MALE') ? 'M' : (rawGender === 'F' || rawGender === 'FEMALE') ? 'F' : '';
+            const genderWord = genderCode === 'M' ? 'MALE' : genderCode === 'F' ? 'FEMALE' : '';
+            if (genderCode) {
+              const gs = document.getElementById('ddlGender');
+              if (gs) {
+                let gf = false;
+                for (let i = 0; !gf && i < gs.options.length; i++) { if (gs.options[i].value.toUpperCase().trim() === genderCode) { gs.selectedIndex = i; gs.dispatchEvent(new Event('change', { bubbles: true })); filled++; gf = true; } }
+                for (let i = 0; !gf && i < gs.options.length; i++) { if (gs.options[i].text.toUpperCase().trim() === genderWord) { gs.selectedIndex = i; gs.dispatchEvent(new Event('change', { bubbles: true })); filled++; gf = true; } }
+              }
+            }
+
+            fill('txtDOB', data.date_of_birth || data.dob || data.dateOfBirth || '');
+            fill('txtBirthCity', data.city_of_birth || data.cityOfBirth || '');
+            setSelect('ddlBirthCountry', data.country_of_birth || data.countryOfBirth || nat);
+
+            // Phase 1 report
+            const phase1Filled = filled;
+
+            // Phase 2: Sponsor fields (after ASP.NET UpdatePanel)
+            setSelect('ddlSponsorType', 'Individual');
+
+            setTimeout(() => {
+              try {
+                fill('txtSponsorName', data.sponsor_name || data.sponsorName || '');
+                fill('txtSponsorOfficeNo', data.phone_number || data.phoneNumber || '');
+                fill('txtSponsorId', data.civil_id || data.civilId || '');
+                fill('txtSponsorAddress', data.address || '');
+                fill('txtSponsorMobileNo', data.mobile_number || data.mobileNumber || data.phone_number || '');
+                fill('txtSponsorRelationship', data.relationship || '');
+                fill('txtOccupationCode', data.occupation_code || data.occupationCode || '');
+                fill('txtOccupationDescription', data.occupation_description || data.occupationDescription || '');
+                fillMasked('txtClearanceNumber', data.pa_number || data.paNumber || '');
+                fill('txtSubmittedbyID', data.civil_id || data.civilId || '');
+                fill('txtSubmittedbyName', data.sponsor_name || data.sponsorName || '');
+                fill('txtSubmittedbyGSM', data.mobile_number || data.mobileNumber || data.phone_number || '');
+
+                createPreviewButtons(data);
+              } catch (e) {
+                console.warn('[VizEz ROP] Phase 2 error:', e);
+              }
+
+              // Report total filled back to background/popup
+              chrome.runtime.sendMessage({ type: 'FILL_COMPLETE', filled, total: filled, phase1: phase1Filled });
+            }, 2000);
+
+            // Send immediate response — phase 1 is done
+            sendResponse({ status: 'filling', filled: phase1Filled, message: `Phase 1: ${phase1Filled} fields filled. Waiting for sponsor section...` });
+
+          } catch (err) {
+            sendResponse({ status: 'error', error: err.message });
+          }
+        });
+      } catch (err) {
+        sendResponse({ status: 'error', error: err.message });
+      }
+
+      return true; // async
+    }
+  });
+} catch (err) {
+  console.warn('[VizEz ROP] Could not register VIZEZ_AUTOFILL listener:', err.message);
+}
