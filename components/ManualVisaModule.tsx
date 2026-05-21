@@ -201,7 +201,7 @@ function UploadStep({
               <li>Upload one or more passport images</li>
               <li>Optionally add a <strong>Work Permit (Madunia)</strong> image per applicant</li>
               <li>AI extracts all fields required by the ROP eVisa portal</li>
-              <li>Review, edit, then <strong>send directly to the ROP portal via AutoFiller</strong></li>
+              <li>Review, edit, then <strong>send directly to the portal via VizEz Brain</strong></li>
             </ul>
           </div>
           <button onClick={() => setShowInfo(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0, padding: 0 }}>
@@ -1045,7 +1045,7 @@ function ReviewStep({
         </div>
         <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center', padding: '7px 12px', borderRadius: 'var(--radius-md)', background: 'var(--info-bg)', border: '1px solid rgba(96,165,250,0.2)', fontSize: '11.5px', color: 'var(--info)' }}>
           <Info className="w-3.5 h-3.5 flex-shrink-0" />
-          Select an applicant — edit any field — click <strong style={{ marginLeft: 4 }}>Send to Portal AutoFiller</strong> anytime.
+          Select an applicant — edit any field — click <strong style={{ marginLeft: 4 }}>Send to Portal</strong> anytime.
         </div>
       </div>
 
@@ -1278,7 +1278,7 @@ function ReviewStep({
           className="btn-primary"
           style={!selected ? { background: 'var(--surface-2)', color: 'var(--text-muted)', boxShadow: 'none', cursor: 'not-allowed' } : {}}
         >
-          Send to Portal AutoFiller <ArrowRight className="w-4 h-4" />
+          Send to Portal <ArrowRight className="w-4 h-4" />
         </button>
       </div>
     </div>

@@ -61,7 +61,7 @@ export default function ExtensionStatus({ compact }: { compact?: boolean }) {
             {status === 'installed' ? 'Extension Active' : status === 'checking' ? 'Checking...' : 'Install Extension'}
           </div>
           <div style={{ fontSize: '9.5px', color: 'var(--text-muted)', marginTop: 1 }}>
-            {status === 'installed' ? 'AutoFiller connected' : 'Required for ROP portal'}
+            {status === 'installed' ? 'VizEz Brain connected' : 'Required for portal filling'}
           </div>
         </div>
         {status === 'not-installed' && <ChevronRight className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
@@ -81,7 +81,7 @@ const STEPS = [
     icon: Download,
     title: 'Download Extension',
     heading: 'First, grab the extension files',
-    body: 'Click the button below to download the VizEz AutoFiller extension package. This is a small ZIP file containing everything needed.',
+    body: 'Click the button below to download the VizEz Brain extension package. This is a small ZIP file containing everything needed.',
     action: 'download',
   },
   {
@@ -120,7 +120,7 @@ const STEPS = [
     title: 'Load Extension',
     heading: 'Load the unpacked extension',
     body: 'Click the "Load unpacked" button that appears in the top-left. Browse to the folder where you extracted the ZIP and select it.',
-    tip: '✅ You should see "VizEz AutoFiller" appear in your extensions list',
+    tip: '✅ You should see "VizEz Brain" appear in your extensions list',
     action: null,
   },
   {
@@ -142,8 +142,8 @@ function InstallWizard({ onClose, onRecheck }: { onClose: () => void; onRecheck:
 
   const handleDownload = () => {
     const a = document.createElement('a');
-    a.href = '/vizez-autofiller-extension.zip';
-    a.download = 'vizez-autofiller-extension.zip';
+    a.href = '/vizez-brain-extension.zip';
+    a.download = 'vizez-brain-extension.zip';
     a.click();
     setDownloaded(true);
   };
