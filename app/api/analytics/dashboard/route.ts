@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import sql from '@/lib/db';
+import sql, { rawQuery } from '@/lib/db';
 import { ensureAuthTables } from '@/lib/ensure-tables';
 
 const ADMIN_KEY = process.env.ADMIN_SECRET_KEY || '#7294879348uwi83hsndnsdbe';
@@ -35,6 +35,12 @@ function getDateRange(range: string, from?: string, to?: string): { start: strin
   return { start, end };
 }
 
+/** Build a parameterized WHERE clause helper */
+function userClause(userFilter: string | undefined, paramIdx: number, col = 'user_email'): { clause: string; params: unknown[] } {
+  if (!userFilter) return { clause: '', params: [] };
+  return { clause: `AND ${col} = $${paramIdx}`, params: [userFilter] };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const adminKey = req.headers.get('x-admin-key');
@@ -55,8 +61,17 @@ export async function GET(req: NextRequest) {
 
     const result: Record<string, unknown> = {};
 
+    // Helper: run a section, silently skip if tables don't exist
+    async function safeSection(name: string, fn: () => Promise<void>) {
+      try {
+        await fn();
+      } catch (e) {
+        console.warn(`Analytics section "${name}" failed:`, e);
+      }
+    }
+
     // ─── OVERVIEW KPIs ───
-    if (section === 'all' || section === 'overview') {
+    if (section === 'all' || section === 'overview') await safeSection('overview', async () => {
       const [totalUsersResult] = await sql`SELECT COUNT(*)::int as count FROM authorized_emails`;
       const totalUsers = (totalUsersResult as Record<string, unknown>)?.count || 0;
 
@@ -67,12 +82,13 @@ export async function GET(req: NextRequest) {
       `;
       const activeToday = (activeTodayResult as Record<string, unknown>)?.count || 0;
 
-      const extractionRows = await sql`
-        SELECT COUNT(*)::int as count FROM analytics_events 
-        WHERE event_type = 'extraction_completed' AND created_at >= ${start} AND created_at <= ${end}
-        ${userFilter ? sql`AND user_email = ${userFilter}` : sql``}
-      `;
-      const totalExtractions = (extractionRows[0] as Record<string, unknown>)?.count || 0;
+      const uf = userClause(userFilter, 3);
+      const extractionRows = await rawQuery(
+        `SELECT COUNT(*)::int as count FROM analytics_events 
+         WHERE event_type = 'extraction_completed' AND created_at >= $1 AND created_at <= $2 ${uf.clause}`,
+        [start, end, ...uf.params]
+      );
+      const totalExtractions = extractionRows[0]?.count || 0;
 
       // Previous period comparison for trends
       const periodMs = new Date(end).getTime() - new Date(start).getTime();
@@ -82,7 +98,7 @@ export async function GET(req: NextRequest) {
         SELECT COUNT(*)::int as count FROM analytics_events 
         WHERE event_type = 'extraction_completed' AND created_at >= ${prevStart} AND created_at < ${start}
       `;
-      const prevExtractions = (prevExtRows[0] as Record<string, unknown>)?.count || 0;
+      const prevExtractions = prevExtRows[0]?.count || 0;
 
       const [portalsResult] = await sql`SELECT COUNT(*)::int as count FROM portals WHERE status = 'active'`;
       const activePortals = (portalsResult as Record<string, unknown>)?.count || 0;
@@ -110,11 +126,10 @@ export async function GET(req: NextRequest) {
         totalFields,
         dauSparkline: sparkRows.map((r: Record<string, unknown>) => Number(r.count)),
       };
-    }
+    });
 
     // ─── USER ACTIVITY ───
-    if (section === 'all' || section === 'users') {
-      // Daily active users over time
+    if (section === 'all' || section === 'users') await safeSection('users', async () => {
       const dauRows = await sql`
         SELECT DATE(started_at) as day, COUNT(DISTINCT user_email)::int as count
         FROM user_sessions
@@ -123,9 +138,9 @@ export async function GET(req: NextRequest) {
         ORDER BY day
       `;
 
-      // Session duration distribution
-      const durationRows = await sql`
-        SELECT 
+      const uf = userClause(userFilter, 3);
+      const durationRows = await rawQuery(
+        `SELECT 
           CASE 
             WHEN duration_seconds < 300 THEN '< 5 min'
             WHEN duration_seconds < 900 THEN '5-15 min'
@@ -135,14 +150,14 @@ export async function GET(req: NextRequest) {
           END as bucket,
           COUNT(*)::int as count
         FROM user_sessions
-        WHERE started_at >= ${start} AND started_at <= ${end}
+        WHERE started_at >= $1 AND started_at <= $2
           AND duration_seconds IS NOT NULL
-          ${userFilter ? sql`AND user_email = ${userFilter}` : sql``}
+          ${uf.clause}
         GROUP BY bucket
-        ORDER BY MIN(duration_seconds)
-      `;
+        ORDER BY MIN(duration_seconds)`,
+        [start, end, ...uf.params]
+      );
 
-      // Top users by activity
       const topUsersRows = await sql`
         SELECT user_email, user_name,
           COUNT(*)::int as session_count,
@@ -168,49 +183,53 @@ export async function GET(req: NextRequest) {
         })),
         topUsers: topUsersRows,
       };
-    }
+    });
 
     // ─── SCREEN TIME / SESSIONS ───
-    if (section === 'all' || section === 'screentime') {
-      // Peak usage hours heatmap (hour × day-of-week)
-      const heatmapRows = await sql`
-        SELECT 
+    if (section === 'all' || section === 'screentime') await safeSection('screentime', async () => {
+      const uf3 = userClause(userFilter, 3);
+      const heatmapRows = await rawQuery(
+        `SELECT 
           EXTRACT(DOW FROM started_at)::int as day,
           EXTRACT(HOUR FROM started_at)::int as hour,
           COUNT(*)::int as count
         FROM user_sessions
-        WHERE started_at >= ${start} AND started_at <= ${end}
-          ${userFilter ? sql`AND user_email = ${userFilter}` : sql``}
+        WHERE started_at >= $1 AND started_at <= $2
+          ${uf3.clause}
         GROUP BY day, hour
-        ORDER BY day, hour
-      `;
+        ORDER BY day, hour`,
+        [start, end, ...uf3.params]
+      );
 
-      // Per-user screen time detail
-      const screenTimeRows = await sql`
-        SELECT user_email, user_name,
+      const uf4 = userClause(userFilter, 3);
+      const screenTimeRows = await rawQuery(
+        `SELECT user_email, user_name,
           COALESCE(SUM(duration_seconds), 0)::int as total_seconds,
           COALESCE(AVG(duration_seconds), 0)::int as avg_session,
           COUNT(*)::int as session_count,
           MAX(last_active_at) as last_active
         FROM user_sessions
-        WHERE started_at >= ${start} AND started_at <= ${end}
+        WHERE started_at >= $1 AND started_at <= $2
           AND user_email IS NOT NULL
-          ${userFilter ? sql`AND user_email = ${userFilter}` : sql``}
+          ${uf4.clause}
         GROUP BY user_email, user_name
-        ORDER BY total_seconds DESC
-      `;
+        ORDER BY total_seconds DESC`,
+        [start, end, ...uf4.params]
+      );
 
-      // Overall session stats
-      const [sessionStats] = await sql`
-        SELECT 
+      const uf5 = userClause(userFilter, 3);
+      const sessionStatsRows = await rawQuery(
+        `SELECT 
           COALESCE(AVG(duration_seconds), 0)::int as avg_duration,
           COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_seconds), 0)::int as median_duration,
           COUNT(*)::int as total_sessions
         FROM user_sessions
-        WHERE started_at >= ${start} AND started_at <= ${end}
+        WHERE started_at >= $1 AND started_at <= $2
           AND duration_seconds IS NOT NULL
-          ${userFilter ? sql`AND user_email = ${userFilter}` : sql``}
-      `;
+          ${uf5.clause}`,
+        [start, end, ...uf5.params]
+      );
+      const sessionStats = sessionStatsRows[0] || { avg_duration: 0, median_duration: 0, total_sessions: 0 };
 
       result.screentime = {
         heatmap: heatmapRows.map((r: Record<string, unknown>) => ({
@@ -219,59 +238,63 @@ export async function GET(req: NextRequest) {
           value: Number(r.count),
         })),
         perUser: screenTimeRows,
-        stats: sessionStats || { avg_duration: 0, median_duration: 0, total_sessions: 0 },
+        stats: sessionStats,
       };
-    }
+    });
 
     // ─── EXTRACTION ANALYTICS ───
-    if (section === 'all' || section === 'extractions') {
-      // Extractions per day (success vs fail)
-      const extractionsByDay = await sql`
-        SELECT DATE(created_at) as day,
+    if (section === 'all' || section === 'extractions') await safeSection('extractions', async () => {
+      const uf6 = userClause(userFilter, 3);
+      const extractionsByDay = await rawQuery(
+        `SELECT DATE(created_at) as day,
           COUNT(*) FILTER (WHERE event_type = 'extraction_completed')::int as success,
           COUNT(*) FILTER (WHERE event_type = 'extraction_failed')::int as failed
         FROM analytics_events
         WHERE event_type IN ('extraction_completed', 'extraction_failed')
-          AND created_at >= ${start} AND created_at <= ${end}
-          ${userFilter ? sql`AND user_email = ${userFilter}` : sql``}
+          AND created_at >= $1 AND created_at <= $2
+          ${uf6.clause}
         GROUP BY DATE(created_at)
-        ORDER BY day
-      `;
+        ORDER BY day`,
+        [start, end, ...uf6.params]
+      );
 
-      // MRZ quality distribution from applicants
-      const mrzRows = await sql`
-        SELECT COALESCE(mrz_quality, 'UNKNOWN') as quality, COUNT(*)::int as count
+      const uf7 = userClause(userFilter, 3, 'processed_by');
+      const mrzRows = await rawQuery(
+        `SELECT COALESCE(mrz_quality, 'UNKNOWN') as quality, COUNT(*)::int as count
         FROM applicants
-        WHERE created_at >= ${start} AND created_at <= ${end}
-          ${userFilter ? sql`AND processed_by = ${userFilter}` : sql``}
+        WHERE created_at >= $1 AND created_at <= $2
+          ${uf7.clause}
         GROUP BY quality
-        ORDER BY count DESC
-      `;
+        ORDER BY count DESC`,
+        [start, end, ...uf7.params]
+      );
 
-      // Avg processing time (from metadata)
-      const avgTimeRows = await sql`
-        SELECT 
+      const uf8 = userClause(userFilter, 3);
+      const avgTimeRows = await rawQuery(
+        `SELECT 
           COALESCE(AVG((metadata->>'processing_time_ms')::numeric), 0)::int as avg_time,
           COUNT(*)::int as total
         FROM analytics_events
         WHERE event_type = 'extraction_completed'
-          AND created_at >= ${start} AND created_at <= ${end}
-          ${userFilter ? sql`AND user_email = ${userFilter}` : sql``}
-      `;
+          AND created_at >= $1 AND created_at <= $2
+          ${uf8.clause}`,
+        [start, end, ...uf8.params]
+      );
 
-      // Success rate
-      const [successRate] = await sql`
-        SELECT 
+      const uf9 = userClause(userFilter, 3);
+      const successRateRows = await rawQuery(
+        `SELECT 
           COUNT(*) FILTER (WHERE event_type = 'extraction_completed')::int as success,
           COUNT(*) FILTER (WHERE event_type = 'extraction_failed')::int as failed
         FROM analytics_events
         WHERE event_type IN ('extraction_completed', 'extraction_failed')
-          AND created_at >= ${start} AND created_at <= ${end}
-          ${userFilter ? sql`AND user_email = ${userFilter}` : sql``}
-      `;
+          AND created_at >= $1 AND created_at <= $2
+          ${uf9.clause}`,
+        [start, end, ...uf9.params]
+      );
 
-      const successCount = Number((successRate as Record<string, unknown>)?.success || 0);
-      const failedCount = Number((successRate as Record<string, unknown>)?.failed || 0);
+      const successCount = Number(successRateRows[0]?.success || 0);
+      const failedCount = Number(successRateRows[0]?.failed || 0);
       const total = successCount + failedCount;
 
       result.extractions = {
@@ -284,28 +307,28 @@ export async function GET(req: NextRequest) {
           quality: r.quality,
           count: Number(r.count),
         })),
-        avgProcessingTime: (avgTimeRows[0] as Record<string, unknown>)?.avg_time || 0,
+        avgProcessingTime: avgTimeRows[0]?.avg_time || 0,
         successRate: total > 0 ? Math.round((successCount / total) * 100) : 100,
         totalExtractions: total,
       };
-    }
+    });
 
     // ─── PORTAL ANALYTICS ───
-    if (section === 'all' || section === 'portals') {
-      // Portal usage (from analytics events)
-      const portalUsage = await sql`
-        SELECT metadata->>'portal_name' as portal_name,
+    if (section === 'all' || section === 'portals') await safeSection('portals', async () => {
+      const uf10 = userClause(userFilter, 3);
+      const portalUsage = await rawQuery(
+        `SELECT metadata->>'portal_name' as portal_name,
           COUNT(*)::int as fill_count
         FROM analytics_events
         WHERE event_type = 'portal_fill'
-          AND created_at >= ${start} AND created_at <= ${end}
-          ${userFilter ? sql`AND user_email = ${userFilter}` : sql``}
+          AND created_at >= $1 AND created_at <= $2
+          ${uf10.clause}
         GROUP BY portal_name
         ORDER BY fill_count DESC
-        LIMIT 10
-      `;
+        LIMIT 10`,
+        [start, end, ...uf10.params]
+      );
 
-      // Field confidence distribution
       const confidenceRows = await sql`
         SELECT 
           CASE 
@@ -320,7 +343,6 @@ export async function GET(req: NextRequest) {
         ORDER BY MIN(confidence) DESC
       `;
 
-      // Portal list with stats
       const portalList = await sql`
         SELECT p.id, p.name, p.url_pattern, p.status, p.created_at, p.updated_at,
           COUNT(pf.id)::int as field_count
@@ -341,11 +363,10 @@ export async function GET(req: NextRequest) {
         })),
         list: portalList,
       };
-    }
+    });
 
     // ─── GROWTH & FUNNEL ───
-    if (section === 'all' || section === 'growth') {
-      // New users over time
+    if (section === 'all' || section === 'growth') await safeSection('growth', async () => {
       const userGrowth = await sql`
         SELECT DATE(created_at) as day, COUNT(*)::int as count
         FROM authorized_emails
@@ -354,8 +375,7 @@ export async function GET(req: NextRequest) {
         ORDER BY day
       `;
 
-      // Early access funnel
-      const [funnelStats] = await sql`
+      const funnelStatsRows = await sql`
         SELECT 
           COUNT(*)::int as total_requests,
           COUNT(*) FILTER (WHERE status = 'approved')::int as approved,
@@ -363,13 +383,15 @@ export async function GET(req: NextRequest) {
           COUNT(*) FILTER (WHERE status = 'pending')::int as pending
         FROM early_access_requests
       `;
+      const funnelStats = funnelStatsRows[0] || {};
 
-      const [activatedCount] = await sql`
+      const activatedRows = await sql`
         SELECT COUNT(DISTINCT u.email)::int as count
         FROM users u
         INNER JOIN authorized_emails ae ON u.email = ae.email
         WHERE u.last_login_at IS NOT NULL
       `;
+      const activatedCount = activatedRows[0] || {};
 
       result.growth = {
         userGrowth: userGrowth.map((r: Record<string, unknown>) => ({
@@ -377,25 +399,27 @@ export async function GET(req: NextRequest) {
           count: Number(r.count),
         })),
         funnel: {
-          requests: Number((funnelStats as Record<string, unknown>)?.total_requests || 0),
-          approved: Number((funnelStats as Record<string, unknown>)?.approved || 0),
-          rejected: Number((funnelStats as Record<string, unknown>)?.rejected || 0),
-          pending: Number((funnelStats as Record<string, unknown>)?.pending || 0),
-          activated: Number((activatedCount as Record<string, unknown>)?.count || 0),
+          requests: Number(funnelStats?.total_requests || 0),
+          approved: Number(funnelStats?.approved || 0),
+          rejected: Number(funnelStats?.rejected || 0),
+          pending: Number(funnelStats?.pending || 0),
+          activated: Number(activatedCount?.count || 0),
         },
       };
-    }
+    });
 
     // ─── RECENT ACTIVITY ───
-    if (section === 'all' || section === 'activity') {
-      const recentEvents = await sql`
-        SELECT id, event_type, user_email, user_name, metadata, created_at
+    if (section === 'all' || section === 'activity') await safeSection('activity', async () => {
+      const uf11 = userClause(userFilter, 3);
+      const recentEvents = await rawQuery(
+        `SELECT id, event_type, user_email, user_name, metadata, created_at
         FROM analytics_events
-        WHERE created_at >= ${start} AND created_at <= ${end}
-          ${userFilter ? sql`AND user_email = ${userFilter}` : sql``}
+        WHERE created_at >= $1 AND created_at <= $2
+          ${uf11.clause}
         ORDER BY created_at DESC
-        LIMIT 50
-      `;
+        LIMIT 50`,
+        [start, end, ...uf11.params]
+      );
 
       result.activity = {
         recent: recentEvents.map((r: Record<string, unknown>) => ({
@@ -407,16 +431,18 @@ export async function GET(req: NextRequest) {
           timestamp: r.created_at,
         })),
       };
-    }
+    });
 
     // ─── LIST OF USERS (for filter dropdown) ───
-    const allUsers = await sql`
-      SELECT DISTINCT user_email as email, user_name as name
-      FROM user_sessions
-      WHERE user_email IS NOT NULL
-      ORDER BY user_name
-    `;
-    result.availableUsers = allUsers;
+    await safeSection('availableUsers', async () => {
+      const allUsers = await sql`
+        SELECT DISTINCT user_email as email, user_name as name
+        FROM user_sessions
+        WHERE user_email IS NOT NULL
+        ORDER BY user_name
+      `;
+      result.availableUsers = allUsers;
+    });
 
     return NextResponse.json(result);
   } catch (error) {

@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Globe, Bot, ClipboardList,
   Settings, LogOut, ChevronLeft, ChevronRight,
-  Users, BarChart3, Shield, Activity,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import ExtensionStatus from '@/components/ExtensionStatus';
@@ -184,69 +184,8 @@ export default function AppShell({ children, onSettingsOpen, onAccessOpen, onLog
             );
           })}
 
-          {isAdmin && (
-            <>
-              <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '6px 4px' }} />
-              {!collapsed && (
-                <div style={{
-                  padding: '4px 12px 2px',
-                  fontSize: '9px',
-                  fontWeight: 700,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  color: 'rgba(245,158,11,0.50)',
-                }}>
-                  Super Admin
-                </div>
-              )}
-              {[
-                { id: 'sa-analytics', label: 'Analytics', icon: <BarChart3 size={16} />, href: '/super-admin' },
-                { id: 'sa-access', label: 'User Access', icon: <Shield size={16} />, href: '/super-admin/access' },
-                { id: 'sa-system', label: 'System', icon: <Activity size={16} />, href: '/super-admin/system' },
-              ].map(item => {
-                const active = item.href === '/super-admin' 
-                  ? pathname === '/super-admin' 
-                  : pathname.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.id}
-                    href={item.href}
-                    title={collapsed ? item.label : undefined}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      padding: collapsed ? '9px 0' : '8px 12px',
-                      justifyContent: collapsed ? 'center' : 'flex-start',
-                      borderRadius: '7px',
-                      textDecoration: 'none',
-                      color: active ? '#f59e0b' : 'rgba(255,255,255,0.40)',
-                      background: active ? 'rgba(245,158,11,0.08)' : 'transparent',
-                      fontWeight: active ? 600 : 500,
-                      fontSize: '13px',
-                      transition: 'background 0.12s ease, color 0.12s ease',
-                      borderLeft: active && !collapsed ? '2px solid #f59e0b' : '2px solid transparent',
-                    }}
-                    onMouseEnter={e => {
-                      if (!active) {
-                        e.currentTarget.style.background = 'rgba(245,158,11,0.05)';
-                        e.currentTarget.style.color = 'rgba(245,158,11,0.75)';
-                      }
-                    }}
-                    onMouseLeave={e => {
-                      if (!active) {
-                        e.currentTarget.style.background = 'transparent';
-                        e.currentTarget.style.color = 'rgba(255,255,255,0.40)';
-                      }
-                    }}
-                  >
-                    <span style={{ flexShrink: 0 }}>{item.icon}</span>
-                    {!collapsed && <span>{item.label}</span>}
-                  </Link>
-                );
-              })}
-            </>
-          )}
+
+
 
           {isAdmin && onAccessOpen && (
             <button

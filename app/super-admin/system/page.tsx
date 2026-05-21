@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Database, Server, Monitor, Activity, RefreshCw,
   CheckCircle2, XCircle, Loader2, Table2, Info,
-  Globe, Code2, HardDrive, Cpu,
+  Globe, Code2, HardDrive, Cpu, ScanLine,
 } from 'lucide-react';
 import { useAdminKey } from '@/context/AdminKeyContext';
 
@@ -257,69 +257,44 @@ export default function SystemPage() {
   const adminKey = useAdminKey();
   const [dbStatus, setDbStatus] = useState<ServiceStatus>({ status: 'checking' });
   const [apiStatus, setApiStatus] = useState<ServiceStatus>({ status: 'checking' });
-  const [frontendStatus] = useState<ServiceStatus>({ status: 'connected' });
+  const [passportStatus, setPassportStatus] = useState<ServiceStatus>({ status: 'checking' });
+  const [frontendStatus] = useState<ServiceStatus>({ status: 'connected', latency: 0 });
   const [refreshing, setRefreshing] = useState(false);
 
   const checkHealth = useCallback(async () => {
     setRefreshing(true);
     setDbStatus({ status: 'checking' });
     setApiStatus({ status: 'checking' });
+    setPassportStatus({ status: 'checking' });
 
-    // Check Database via admin stats endpoint
     try {
-      const dbStart = Date.now();
-      const res = await fetch('/api/admin/stats', {
+      const t = Date.now();
+      const res = await fetch('/api/admin/health', {
         headers: { 'X-Admin-Key': adminKey },
+        signal: AbortSignal.timeout(5000),
       });
-      const dbLatency = Date.now() - dbStart;
+      const roundTrip = Date.now() - t;
+      const data = await res.json().catch(() => ({} as any));
 
-      if (res.ok) {
-        setDbStatus({
-          status: 'connected',
-          latency: dbLatency,
-          message: 'All queries executing normally',
-        });
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setDbStatus({
-          status: 'error',
-          latency: dbLatency,
-          message: data.error || `HTTP ${res.status}`,
-        });
-      }
-    } catch (err) {
-      setDbStatus({
-        status: 'error',
-        message: 'Connection failed — database may be unreachable',
-      });
-    }
+      // DB status — server-measured SELECT 1
+      setDbStatus(data.dbOk
+        ? { status: 'connected', latency: data.dbPing ?? roundTrip, message: 'All queries executing normally' }
+        : { status: 'error', latency: roundTrip, message: data.dbError || 'Database error' });
 
-    // Check API Server
-    try {
-      const apiStart = Date.now();
-      const res = await fetch('/api/admin/stats', {
-        headers: { 'X-Admin-Key': adminKey },
-      });
-      const apiLatency = Date.now() - apiStart;
+      // API status — overhead = roundTrip minus internal work
+      const apiLatency = Math.max(0, roundTrip - (data.dbPing ?? 0) - (data.ppLatency ?? 0));
+      setApiStatus(res.ok
+        ? { status: 'connected', latency: apiLatency, message: 'API responding to requests' }
+        : { status: 'error', latency: roundTrip, message: `HTTP ${res.status} response` });
 
-      if (res.ok) {
-        setApiStatus({
-          status: 'connected',
-          latency: apiLatency,
-          message: 'API responding to requests',
-        });
-      } else {
-        setApiStatus({
-          status: 'error',
-          latency: apiLatency,
-          message: `HTTP ${res.status} response`,
-        });
-      }
+      // Passport Processor — server-measured localhost ping (no CORS overhead)
+      setPassportStatus(data.ppOk
+        ? { status: 'connected', latency: data.ppLatency ?? 0, message: 'Document processing engine online' }
+        : { status: 'error', latency: data.ppLatency, message: data.ppError || 'Passport processor not responding' });
     } catch {
-      setApiStatus({
-        status: 'error',
-        message: 'API server is not responding',
-      });
+      setDbStatus({ status: 'error', message: 'Connection failed — services unreachable' });
+      setApiStatus({ status: 'error', message: 'API server is not responding' });
+      setPassportStatus({ status: 'error', message: 'Passport processor is not responding' });
     }
 
     setRefreshing(false);
@@ -413,7 +388,7 @@ export default function SystemPage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: 'repeat(4, 1fr)',
             gap: '14px',
             marginBottom: '32px',
           }}
@@ -439,10 +414,20 @@ export default function SystemPage() {
             ]}
           />
           <ServiceCard
+            title="Passport Processor"
+            icon={<ScanLine size={18} />}
+            status={passportStatus}
+            index={2}
+            details={[
+              { label: 'Engine', value: 'FastAPI / Python' },
+              { label: 'Version', value: 'v2.0.0' },
+            ]}
+          />
+          <ServiceCard
             title="Frontend"
             icon={<Monitor size={18} />}
             status={frontendStatus}
-            index={2}
+            index={3}
             details={[
               { label: 'Framework', value: 'Next.js 14' },
               { label: 'Renderer', value: 'App Router (RSC)' },

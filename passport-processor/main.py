@@ -68,3 +68,9 @@ async def root() -> dict:
             "quality_scoring",
         ],
     }
+
+
+@app.get("/health", tags=["Health"])
+async def health() -> dict:
+    """Ultra-lightweight health probe — no heavy imports."""
+    return {"status": "ok"}

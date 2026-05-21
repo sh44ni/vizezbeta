@@ -18,15 +18,21 @@ import uuid
 import time
 import logging
 
-import cv2
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from services.processor import PassportProcessor
-
 logger = logging.getLogger("vizez.document_expert")
 router = APIRouter()
-processor = PassportProcessor()
+
+# Lazy-loaded on first enhance request — avoids ~300ms cv2/numpy import on startup
+_processor = None
+
+def _get_processor():
+    global _processor
+    if _processor is None:
+        from services.processor import PassportProcessor
+        _processor = PassportProcessor()
+    return _processor
 
 
 @router.post(
@@ -68,7 +74,7 @@ async def enhance_passport(file: UploadFile = File(...)) -> JSONResponse:
 
     # Run pipeline
     try:
-        result = processor.process(contents)
+        result = _get_processor().process(contents)
     except ValueError as exc:
         logger.warning(f"[{request_id}] Validation error: {exc}")
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -80,6 +86,7 @@ async def enhance_passport(file: UploadFile = File(...)) -> JSONResponse:
         ) from exc
 
     # Encode enhanced image to JPEG base64
+    import cv2
     encode_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
     success, buffer = cv2.imencode(".jpg", result["image"], encode_params)
     if not success:

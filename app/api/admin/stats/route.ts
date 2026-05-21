@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from '@/lib/db';
-import { ensureAuthTables } from '@/lib/ensure-tables';
 
 const ADMIN_KEY = process.env.ADMIN_SECRET_KEY || '#7294879348uwi83hsndnsdbe';
 
@@ -15,22 +14,25 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    await ensureAuthTables();
+    // Single query instead of 6 sequential round trips
+    const rows = await sql`
+      SELECT
+        (SELECT COUNT(*)::int FROM early_access_requests) AS total,
+        (SELECT COUNT(*)::int FROM early_access_requests WHERE status = 'pending') AS pending,
+        (SELECT COUNT(*)::int FROM early_access_requests WHERE status = 'approved') AS approved,
+        (SELECT COUNT(*)::int FROM early_access_requests WHERE status = 'rejected') AS rejected,
+        (SELECT COUNT(*)::int FROM authorized_emails) AS emails,
+        (SELECT COUNT(*)::int FROM users) AS users
+    `;
 
-    const totalRows = await sql`SELECT COUNT(*)::int AS count FROM early_access_requests`;
-    const pendingRows = await sql`SELECT COUNT(*)::int AS count FROM early_access_requests WHERE status = 'pending'`;
-    const approvedRows = await sql`SELECT COUNT(*)::int AS count FROM early_access_requests WHERE status = 'approved'`;
-    const rejectedRows = await sql`SELECT COUNT(*)::int AS count FROM early_access_requests WHERE status = 'rejected'`;
-    const emailsRows = await sql`SELECT COUNT(*)::int AS count FROM authorized_emails`;
-    const usersRows = await sql`SELECT COUNT(*)::int AS count FROM users`;
-
+    const r = rows[0];
     return NextResponse.json({
-      totalRequests: totalRows[0].count,
-      pending: pendingRows[0].count,
-      approved: approvedRows[0].count,
-      rejected: rejectedRows[0].count,
-      authorizedEmails: emailsRows[0].count,
-      activeUsers: usersRows[0].count,
+      totalRequests: r.total,
+      pending: r.pending,
+      approved: r.approved,
+      rejected: r.rejected,
+      authorizedEmails: r.emails,
+      activeUsers: r.users,
     });
   } catch (error) {
     console.error('Stats error:', error);
