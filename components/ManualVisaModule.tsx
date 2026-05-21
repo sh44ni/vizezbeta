@@ -1262,9 +1262,14 @@ function ReviewStep({
               _workPermitImageUrl: selected.workPermitImageDataUrl || '',
             };
 
+
             console.log('VizEz: Dispatching data to extension via postMessage. Keys:', Object.keys(payload));
             window.postMessage({
               type: 'VIZEZ_SEND_TO_EXTENSION',
+              addon: {
+                id: 'rop-evisa',
+                name: 'ROP eVisa Manual Filler',
+              },
               payload,
             }, '*');
 

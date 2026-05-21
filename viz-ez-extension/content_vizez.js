@@ -86,6 +86,7 @@ window.addEventListener('message', (event) => {
   // ── SEND TO EXTENSION: Save passport data for auto-fill ──
   if (type === 'VIZEZ_SEND_TO_EXTENSION') {
     const passportData = payload;
+    const addon = event.data.addon || null;
 
     try {
       if (!passportData) {
@@ -95,10 +96,11 @@ window.addEventListener('message', (event) => {
 
       const hasPassportImg = !!passportData._passportImageUrl;
       const hasWpImg = !!passportData._workPermitImageUrl;
-      console.log('[VizEz Extension] Sending data to storage.');
+      console.log('[VizEz Extension] Sending data to storage. Addon:', addon?.id || 'default');
 
       chrome.runtime.sendMessage({
         type: 'SAVE_VIZEZ_DATA',
+        addon: addon,
         payload: passportData
       }, (response) => {
         if (chrome.runtime.lastError) {
@@ -106,10 +108,11 @@ window.addEventListener('message', (event) => {
           return;
         }
         if (response && response.status === 'success') {
+          const addonLabel = addon?.name ? ` (${addon.name})` : '';
           const imgInfo = (hasPassportImg || hasWpImg)
             ? `\n📄 Passport preview: ${hasPassportImg ? '✅' : '❌'}\n📋 Work permit preview: ${hasWpImg ? '✅' : '❌'}`
             : '';
-          alert('✅ Data securely saved to AutoFiller extension!' + imgInfo);
+          alert(`✅ Data saved to VizEz Brain${addonLabel}!` + imgInfo);
         } else if (response && response.status === 'error') {
           alert('❌ Storage error: ' + (response.error || 'Unknown error'));
         } else {

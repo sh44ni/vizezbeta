@@ -22,14 +22,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // ── SAVE (from content_vizez.js) ──
   if (message.type === 'SAVE_VIZEZ_DATA') {
     const payload = message.payload || {};
+    const addon = message.addon || null;
     const { _passportImageUrl, _workPermitImageUrl, ...fieldData } = payload;
 
     const hasPassportImg = !!_passportImageUrl;
     const hasWpImg       = !!_workPermitImageUrl;
 
     console.log('VizEz: Saving data. Fields:', Object.keys(fieldData).length,
-                '| Passport image:', hasPassportImg, '| WP image:', hasWpImg);
+                '| Passport image:', hasPassportImg, '| WP image:', hasWpImg,
+                '| Addon:', addon?.id || 'default');
 
+    // Save to legacy key (backward compat)
     chrome.storage.local.set({ vizezPassportData: fieldData }, () => {
       if (chrome.runtime.lastError) {
         console.error('VizEz: Failed to save field data —', chrome.runtime.lastError.message);
@@ -37,6 +40,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
 
+      // Also save to addon-scoped storage
+      const addonId = addon?.id || 'default';
+      chrome.storage.local.get(['vizezAddonData'], (addonResult) => {
+        const addonData = addonResult.vizezAddonData || {};
+        if (!addonData[addonId]) {
+          addonData[addonId] = { name: addon?.name || 'Portal', applicants: [] };
+        }
+
+        // Add applicant to this addon's list
+        addonData[addonId].applicants.push({
+          name: `${fieldData.surname || ''} ${fieldData.first_name || ''}`.trim() || 'Unknown',
+          nationality: fieldData.nationality || '',
+          passport_number: fieldData.passport_number || '',
+          data: fieldData,
+          timestamp: Date.now(),
+        });
+
+        chrome.storage.local.set({ vizezAddonData: addonData }, () => {
+          console.log('VizEz: Addon data saved. Addon:', addonId,
+                      '| Total applicants:', addonData[addonId].applicants.length);
+        });
+      });
+
+      // Save images to session storage
       const imageData = {};
       if (_passportImageUrl)  imageData.vizezPassportImg  = _passportImageUrl;
       if (_workPermitImageUrl) imageData.vizezWorkPermitImg = _workPermitImageUrl;

@@ -293,73 +293,169 @@ async function loadPortals() {
 // DATA TAB
 // ═══════════════════════════════════════════════
 
+const ADDON_ICONS = {
+  'rop-evisa': '🇴🇲',
+  'cnic-extractor': '🆔',
+  'universal-doc': '📄',
+  'batch-filler': '🔗',
+  'default': '📋',
+};
+
+const addonDataEl = $('#addon-data');
+
 async function loadApplicants() {
   dataLoading.style.display = '';
   dataEmpty.style.display = 'none';
   dataList.style.display = 'none';
+  addonDataEl.style.display = 'none';
 
-  chrome.storage.local.get(['vizezPassportData'], (result) => {
+  // ── Load addon-scoped data ──
+  chrome.storage.local.get(['vizezAddonData', 'vizezPassportData'], (result) => {
+    const addonData = result.vizezAddonData || {};
+    const addonIds = Object.keys(addonData);
+
+    if (addonIds.length > 0) {
+      addonDataEl.style.display = '';
+      addonDataEl.innerHTML = '';
+
+      for (const addonId of addonIds) {
+        const addon = addonData[addonId];
+        if (!addon.applicants || addon.applicants.length === 0) continue;
+
+        const icon = ADDON_ICONS[addonId] || ADDON_ICONS['default'];
+
+        // Section header
+        const section = document.createElement('div');
+        section.className = 'addon-section';
+        section.innerHTML = `
+          <div class="addon-header">
+            <span class="addon-icon">${icon}</span>
+            <span class="addon-title">${esc(addon.name)}</span>
+            <span class="addon-count">${addon.applicants.length}</span>
+            <button class="addon-clear-btn" title="Clear all ${esc(addon.name)} data">✕</button>
+          </div>
+        `;
+
+        // Clear all button for this addon
+        section.querySelector('.addon-clear-btn').addEventListener('click', () => {
+          if (!confirm(`Clear all ${addon.applicants.length} applicants from ${addon.name}?`)) return;
+          delete addonData[addonId];
+          chrome.storage.local.set({ vizezAddonData: addonData }, () => loadApplicants());
+        });
+
+        // Applicant cards
+        const cardContainer = document.createElement('div');
+        cardContainer.className = 'addon-applicants';
+
+        addon.applicants.forEach((applicant, idx) => {
+          const card = document.createElement('div');
+          card.className = 'applicant-card addon-card';
+          card.innerHTML = `
+            <div class="card-dot active"></div>
+            <div class="card-body">
+              <div class="card-title">${esc(applicant.name || 'Unknown')}</div>
+              <div class="card-meta">
+                <span>${esc(applicant.passport_number || '—')}</span>
+                <span>${esc(applicant.nationality || '—')}</span>
+              </div>
+            </div>
+            <button class="card-fill-btn" title="Load for fill">▶ Fill</button>
+            <button class="card-remove-btn" title="Remove">✕</button>
+          `;
+
+          // Fill button — load this applicant's data into legacy storage
+          card.querySelector('.card-fill-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            chrome.storage.local.set({ vizezPassportData: applicant.data }, () => {
+              dataLoaded.style.display = '';
+              loadedName.textContent = applicant.name;
+              loadedDetail.textContent = `${applicant.passport_number || '—'} • Ready to fill`;
+              card.style.borderColor = 'var(--success)';
+              setTimeout(() => { card.style.borderColor = ''; }, 1500);
+            });
+          });
+
+          // Remove button
+          card.querySelector('.card-remove-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            addonData[addonId].applicants.splice(idx, 1);
+            if (addonData[addonId].applicants.length === 0) delete addonData[addonId];
+            chrome.storage.local.set({ vizezAddonData: addonData }, () => loadApplicants());
+          });
+
+          cardContainer.appendChild(card);
+        });
+
+        section.appendChild(cardContainer);
+        addonDataEl.appendChild(section);
+      }
+    }
+
+    // Also check legacy single-applicant data
     if (result.vizezPassportData && Object.keys(result.vizezPassportData).length > 0) {
       const d = result.vizezPassportData;
       dataLoaded.style.display = '';
-      loadedName.textContent = d.full_name || d.fullName || d.given_names || '—';
+      loadedName.textContent = d.full_name || d.fullName || d.surname || '—';
       loadedDetail.textContent = `${d.passport_number || d.passportNumber || '—'} • Ready to fill`;
     }
   });
 
+  // ── Also load API applicants ──
   try {
     const resp = await fetch(`${ACTIVE_API_BASE}/api/applicants?limit=10`);
     const data = await resp.json();
     const applicants = data.applicants || [];
 
     dataLoading.style.display = 'none';
-    if (applicants.length === 0) { dataEmpty.style.display = ''; return; }
+    if (applicants.length === 0 && !addonDataEl.innerHTML) { dataEmpty.style.display = ''; return; }
 
-    dataList.style.display = '';
-    dataList.innerHTML = '';
+    if (applicants.length > 0) {
+      dataList.style.display = '';
+      dataList.innerHTML = '';
 
-    for (const a of applicants) {
-      const card = document.createElement('div');
-      card.className = 'applicant-card';
-      card.innerHTML = `
-        <div class="card-dot ${a.mrz_quality === 'VERIFIED' ? 'active' : 'remap'}"></div>
-        <div class="card-body">
-          <div class="card-title">${esc(a.name)}</div>
-          <div class="card-meta">
-            <span>${esc(a.passport_number || '—')}</span>
-            <span>${esc(a.nationality || '—')}</span>
-            <span>${timeAgo(a.created_at)}</span>
+      for (const a of applicants) {
+        const card = document.createElement('div');
+        card.className = 'applicant-card';
+        card.innerHTML = `
+          <div class="card-dot ${a.mrz_quality === 'VERIFIED' ? 'active' : 'remap'}"></div>
+          <div class="card-body">
+            <div class="card-title">${esc(a.name)}</div>
+            <div class="card-meta">
+              <span>${esc(a.passport_number || '—')}</span>
+              <span>${esc(a.nationality || '—')}</span>
+              <span>${timeAgo(a.created_at)}</span>
+            </div>
           </div>
-        </div>
-        ${a.has_work_permit ? '<span class="card-badge wp">WP</span>' : ''}
-        <span class="card-badge loaded" style="display:none">Loaded</span>
-        <svg class="card-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-      `;
+          ${a.has_work_permit ? '<span class="card-badge wp">WP</span>' : ''}
+          <span class="card-badge loaded" style="display:none">Loaded</span>
+          <svg class="card-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        `;
 
-      card.addEventListener('click', async () => {
-        try {
-          const resp = await fetch(`${ACTIVE_API_BASE}/api/applicants/${a.id}`);
-          const fillData = await resp.json();
-          chrome.storage.local.set({ vizezPassportData: fillData.fill_data || fillData }, () => {
-            dataLoaded.style.display = '';
-            loadedName.textContent = a.name;
-            loadedDetail.textContent = `${a.passport_number || '—'} • Ready to fill`;
-            $$('.applicant-card .card-badge.loaded').forEach(b => b.style.display = 'none');
-            card.querySelector('.card-badge.loaded').style.display = '';
-            card.style.borderColor = 'var(--success)';
-            setTimeout(() => { card.style.borderColor = ''; }, 1500);
-          });
-        } catch {
-          card.style.borderColor = 'var(--error)';
-          setTimeout(() => { card.style.borderColor = ''; }, 2000);
-        }
-      });
+        card.addEventListener('click', async () => {
+          try {
+            const resp = await fetch(`${ACTIVE_API_BASE}/api/applicants/${a.id}`);
+            const fillData = await resp.json();
+            chrome.storage.local.set({ vizezPassportData: fillData.fill_data || fillData }, () => {
+              dataLoaded.style.display = '';
+              loadedName.textContent = a.name;
+              loadedDetail.textContent = `${a.passport_number || '—'} • Ready to fill`;
+              $$('.applicant-card .card-badge.loaded').forEach(b => b.style.display = 'none');
+              card.querySelector('.card-badge.loaded').style.display = '';
+              card.style.borderColor = 'var(--success)';
+              setTimeout(() => { card.style.borderColor = ''; }, 1500);
+            });
+          } catch {
+            card.style.borderColor = 'var(--error)';
+            setTimeout(() => { card.style.borderColor = ''; }, 2000);
+          }
+        });
 
-      dataList.appendChild(card);
+        dataList.appendChild(card);
+      }
     }
   } catch {
     dataLoading.style.display = 'none';
-    dataEmpty.style.display = '';
+    if (!addonDataEl.innerHTML) dataEmpty.style.display = '';
   }
 }
 

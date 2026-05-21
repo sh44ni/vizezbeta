@@ -629,3 +629,121 @@ body {
 .btn-warn:hover {
   background: rgba(251, 191, 36, 0.15);
 }
+
+/* ═══════════════════════════════════════════════
+   ADDON SECTIONS — Data Tab
+   ═══════════════════════════════════════════════ */
+
+.addon-section {
+  margin-bottom: 12px;
+}
+
+.addon-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+  border-bottom: none;
+}
+
+.addon-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.addon-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.addon-count {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.addon-clear-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.addon-clear-btn:hover {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.2);
+  color: var(--error);
+}
+
+.addon-applicants {
+  border: 1px solid var(--border);
+  border-radius: 0 0 10px 10px;
+  overflow: hidden;
+}
+
+.addon-card {
+  border-radius: 0 !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.addon-card:last-child {
+  border-bottom: none !important;
+}
+
+.card-fill-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(124, 92, 252, 0.25);
+  background: rgba(124, 92, 252, 0.08);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.card-fill-btn:hover {
+  background: rgba(124, 92, 252, 0.18);
+  border-color: rgba(124, 92, 252, 0.40);
+}
+
+.card-remove-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.card-remove-btn:hover {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.2);
+  color: var(--error);
+}
