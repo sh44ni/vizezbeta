@@ -23,7 +23,7 @@
           </div>
           <div>
             <h1 class="logo-title">VizEz Brain</h1>
-            <span class="version-badge">v3.0</span>
+            <span class="version-badge">v3.1</span>
           </div>
         </div>
         <div class="header-actions">
@@ -39,112 +39,76 @@
       </div>
     </header>
 
-    <!-- Tab navigation -->
-    <nav class="tab-bar">
-      <button class="tab active" data-tab="portals">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-        Portals
-      </button>
-      <button class="tab" data-tab="fill">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-        Fill
-      </button>
-      <button class="tab" data-tab="applicants">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-        Data
-      </button>
-      <button class="tab" data-tab="scan">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
-        Scan
-      </button>
-    </nav>
-
-    <!-- Tab: Portals -->
-    <section id="tab-portals" class="tab-content active">
+    <!-- View: Portal List -->
+    <section id="view-portals" class="view active">
       <div id="portals-loading" class="empty-state">
         <div class="spinner"></div>
         <p>Loading portals...</p>
       </div>
       <div id="portals-empty" class="empty-state" style="display:none">
         <div class="empty-icon">🌐</div>
-        <h3>No portals mapped yet</h3>
-        <p>Open the VizEz web app and train your first portal.</p>
+        <h3>No portals yet</h3>
+        <p>Send data from VizEz web app to get started.</p>
       </div>
-      <div id="portals-list" class="card-list" style="display:none"></div>
+      <div id="portals-list" style="display:none"></div>
     </section>
 
-    <!-- Tab: Fill Queue -->
-    <section id="tab-fill" class="tab-content">
-      <div id="fill-empty" class="empty-state">
-        <div class="empty-icon">▶️</div>
-        <h3>No fill queue</h3>
-        <p>Upload documents in the VizEz web app and click <strong>Send to Extension</strong>.</p>
+    <!-- View: Portal Detail -->
+    <section id="view-detail" class="view">
+      <button id="btn-back" class="back-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        All Portals
+      </button>
+
+      <div id="detail-header" class="detail-header">
+        <span id="detail-icon" class="detail-icon">🌐</span>
+        <div class="detail-info">
+          <div id="detail-name" class="detail-name">—</div>
+          <div id="detail-status" class="detail-status"></div>
+        </div>
       </div>
-      <div id="fill-queue" style="display:none">
+
+      <!-- Current applicant -->
+      <div id="detail-empty" class="empty-state" style="display:none">
+        <div class="empty-icon">📭</div>
+        <h3>No data queued</h3>
+        <p>Extract documents in VizEz and click <strong>Send to Portal</strong>.</p>
+      </div>
+
+      <div id="detail-fill" style="display:none">
         <!-- Progress -->
         <div class="fill-progress">
-          <span id="fill-progress-text">1 of 1</span>
-          <div class="fill-progress-bar"><div id="fill-progress-fill"></div></div>
+          <span id="detail-progress-text">1 of 1</span>
+          <div class="fill-progress-bar"><div id="detail-progress-fill"></div></div>
         </div>
-        <!-- Applicant card -->
-        <div class="fill-card">
-          <div class="fill-avatar" id="fill-avatar">👤</div>
-          <div class="fill-name" id="fill-name">—</div>
-          <div class="fill-detail" id="fill-detail">—</div>
-          <div id="fill-status-badge" class="fill-badge" style="display:none">✓ Filled</div>
+
+        <!-- Current applicant card -->
+        <div class="current-card">
+          <div class="current-avatar" id="detail-avatar">👤</div>
+          <div class="current-info">
+            <div class="current-name" id="detail-applicant-name">—</div>
+            <div class="current-meta" id="detail-applicant-meta">—</div>
+          </div>
+          <div id="detail-badge" class="fill-badge" style="display:none">✓ Filled</div>
         </div>
-        <!-- Main action -->
-        <button id="btn-fill" class="btn-primary btn-full fill-btn-main">▶ Fill</button>
-        <!-- Secondary row -->
+
+        <!-- Fill button -->
+        <button id="btn-detail-fill" class="btn-primary btn-full fill-btn-main">▶ Fill</button>
+        <button id="btn-detail-refill" class="btn-primary btn-full fill-btn-main" style="display:none;background:var(--accent-soft);color:var(--accent);border:1px solid rgba(124,92,252,0.25)">↺ Re-fill</button>
+
+        <!-- Navigation -->
         <div class="fill-nav-row">
-          <button id="btn-refill" class="btn-sm btn-ghost" style="display:none">↺ Re-fill</button>
-          <button id="btn-prev" class="btn-sm btn-ghost">‹ Prev</button>
-          <button id="btn-skip" class="btn-sm btn-warn">Skip ›</button>
-          <button id="btn-next" class="btn-sm btn-ghost">Next ›</button>
+          <button id="btn-detail-prev" class="btn-sm btn-ghost">‹ Prev</button>
+          <button id="btn-detail-skip" class="btn-sm btn-warn">Skip ›</button>
+          <button id="btn-detail-next" class="btn-sm btn-ghost">Next ›</button>
         </div>
-      </div>
-    </section>
 
-    <!-- Tab: Data (Applicants) -->
-    <section id="tab-applicants" class="tab-content">
-      <div id="data-loading" class="empty-state">
-        <div class="spinner"></div>
-        <p>Loading applicants...</p>
-      </div>
-      <div id="data-empty" class="empty-state" style="display:none">
-        <div class="empty-icon">👤</div>
-        <h3>No applicant data</h3>
-        <p>Extract a passport in VizEz to load applicant data.</p>
-      </div>
-      <!-- Addon-grouped applicants -->
-      <div id="addon-data" style="display:none"></div>
-      <!-- API-fetched applicants -->
-      <div id="data-list" class="card-list" style="display:none"></div>
-      <div id="data-loaded" class="loaded-banner" style="display:none">
-        <div class="loaded-check">✓</div>
-        <div class="loaded-info">
-          <strong id="loaded-name">—</strong>
-          <span id="loaded-detail">Ready to fill</span>
+        <!-- Queue list -->
+        <div class="queue-divider">
+          <span>Queue</span>
+          <button id="btn-clear-queue" class="btn-sm btn-ghost" style="font-size:10px;padding:2px 8px">Clear</button>
         </div>
-        <button id="btn-clear-data" class="btn-sm btn-ghost" title="Clear loaded data">✕</button>
-      </div>
-    </section>
-
-    <!-- Tab: Scan -->
-    <section id="tab-scan" class="tab-content">
-      <div class="scan-panel">
-        <div class="scan-icon">🔍</div>
-        <h3>Scan Current Page</h3>
-        <p>Analyze the active tab's form fields. Results are sent to the VizEz web app for mapping.</p>
-        <button id="btn-scan" class="btn-primary btn-full">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
-          Scan Page Fields
-        </button>
-        <div id="scan-result" class="scan-result" style="display:none">
-          <div class="scan-stat"><span class="scan-num" id="scan-total">0</span><span>fields</span></div>
-          <div class="scan-stat"><span class="scan-num" id="scan-required">0</span><span>required</span></div>
-          <div class="scan-stat"><span class="scan-num" id="scan-selects">0</span><span>selects</span></div>
-        </div>
+        <div id="detail-queue" class="queue-list"></div>
       </div>
     </section>
   </div>
