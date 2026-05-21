@@ -14,6 +14,7 @@ import { handleDbInit } from './routes/db-init.js';
 import { handleGetApplicants, handleGetApplicantById, handlePostApplicant } from './routes/applicants.js';
 import { handleGetPortals, handleGetPortalById, handleCreatePortal, handleUpdatePortal, handleUpdatePortalFields, handleDeletePortal } from './routes/portals.js';
 import { handleAnalyzeFields } from './routes/analyze-fields.js';
+import { handleGetAddons, handleRequestAddon, handleGetAddonRequests, handleReviewAddonRequest, handleToggleAddonAccess, handleGetAddonAccess } from './routes/addons.js';
 
 const PORT = process.env.PORT || 4000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
@@ -202,6 +203,31 @@ const server = http.createServer(async (req, res) => {
         return handleSetFillQueue(req, res, body);
       }
       if (method === 'DELETE') return handleClearFillQueue(req, res);
+    }
+
+    // ── /api/addons ──
+    if (path === '/api/addons') {
+      if (method === 'GET') return handleGetAddons(req, res, url);
+    }
+    if (path === '/api/addons/request' && method === 'POST') {
+      const body = await parseJSONBody(req);
+      return handleRequestAddon(req, res, body);
+    }
+    if (path === '/api/addons/requests') {
+      if (method === 'GET') return handleGetAddonRequests(req, res);
+    }
+    const addonRequestMatch = path.match(/^\/api\/addons\/requests\/(\d+)$/);
+    if (addonRequestMatch && method === 'PUT') {
+      const body = await parseJSONBody(req);
+      return handleReviewAddonRequest(req, res, body, parseInt(addonRequestMatch[1], 10));
+    }
+    const addonAccessMatch = path.match(/^\/api\/addons\/access\/(\d+)$/);
+    if (addonAccessMatch && method === 'PUT') {
+      const body = await parseJSONBody(req);
+      return handleToggleAddonAccess(req, res, body, parseInt(addonAccessMatch[1], 10));
+    }
+    if (path === '/api/addons/access' && method === 'GET') {
+      return handleGetAddonAccess(req, res);
     }
 
     // ── Health check ──

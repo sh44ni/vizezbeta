@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Globe, Bot, ClipboardList,
+  LayoutDashboard, Globe, Bot, Blocks,
   Settings, LogOut, ChevronLeft, ChevronRight,
   Users, BarChart3,
 } from 'lucide-react';
@@ -23,7 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard',    icon: <LayoutDashboard size={16} />, href: '/' },
   { id: 'portals',   label: 'Portals',      icon: <Globe size={16} />,          href: '/dashboard/portals' },
   { id: 'train',     label: 'AI Training',  icon: <Bot size={16} />,            href: '/dashboard/portals/new' },
-  { id: 'manual',    label: 'Manual Entry', icon: <ClipboardList size={16} />,  href: '/manual' },
+  { id: 'addons',    label: 'Addons',       icon: <Blocks size={16} />,        href: '/addons' },
 ];
 
 interface Props {

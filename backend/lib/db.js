@@ -139,9 +139,35 @@ export async function ensureTables() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS addon_access (
+      id SERIAL PRIMARY KEY,
+      user_email TEXT NOT NULL,
+      addon_id TEXT NOT NULL,
+      enabled BOOLEAN DEFAULT true,
+      granted_by TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_email, addon_id)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS addon_requests (
+      id SERIAL PRIMARY KEY,
+      user_email TEXT NOT NULL,
+      user_name TEXT,
+      addon_id TEXT NOT NULL,
+      addon_name TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      reviewed_by TEXT,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT');
 
-  console.log('[db] Tables ensured (users, passport_logs, applicants, portals, portal_fields, authorized_emails, otp_codes, early_access_requests)');
+  console.log('[db] Tables ensured (users, passport_logs, applicants, portals, portal_fields, authorized_emails, otp_codes, early_access_requests, addon_access, addon_requests)');
 }
 
 export default pool;

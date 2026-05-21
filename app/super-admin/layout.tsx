@@ -14,6 +14,7 @@ const ADMIN_KEY_STORAGE = 'vizez_admin_key';
 const NAV_ITEMS = [
   { href: '/super-admin', label: 'Analytics', icon: BarChart3, exact: true },
   { href: '/super-admin/access', label: 'User Access', icon: UserCheck, exact: false },
+  { href: '/super-admin/addons', label: 'Addons', icon: Activity, exact: false },
   { href: '/super-admin/system', label: 'System', icon: Server, exact: false },
 ];
 
