@@ -1,12 +1,8 @@
 // popup.js — VizEz Portal Brain Popup v3
 
-// Production API base — change to localhost:4000 for development
+// Always use production API — extension is sideloaded so update_url detection won't work
 const API_BASE = 'https://earlyaccess.vizez.cloud';
-const DEV_API_BASE = 'http://localhost:4000';
-
-// Auto-detect: use dev if extension is loaded unpacked (has no update_url)
-const isDev = !chrome.runtime.getManifest().update_url;
-const ACTIVE_API_BASE = isDev ? DEV_API_BASE : API_BASE;
+const ACTIVE_API_BASE = API_BASE;
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
