@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VizEz Brain",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Scan government visa portals, map form fields to passport and work-permit data, and auto-fill in one click.",
   "permissions": [
     "storage",
