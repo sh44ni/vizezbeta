@@ -60,7 +60,7 @@ const STATUS_COLORS = {
   info: 'rgba(255,255,255,0.35)',
 } as const;
 
-const BACKEND_URL = 'http://localhost:4000';
+const BACKEND_URL = '';
 
 function DashboardContent() {
   const { user } = useAuth();

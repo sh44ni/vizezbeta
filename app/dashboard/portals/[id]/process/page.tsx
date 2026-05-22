@@ -9,7 +9,7 @@ import {
   Trash2, Send,
 } from 'lucide-react';
 
-const BACKEND_URL = 'http://localhost:4000';
+const BACKEND_URL = '';
 
 interface Applicant {
   id: string;

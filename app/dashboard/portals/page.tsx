@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Plus, Globe, Clock, Layers, MoreVertical, Edit3, RefreshCw, Trash2, Copy, CheckCircle, AlertTriangle, Loader, Inbox, Play } from 'lucide-react';
 import type { PortalStatus } from './portal-types';
 
-const BACKEND_URL = 'http://localhost:4000';
+const BACKEND_URL = '';
 
 interface PortalData {
   id: string;

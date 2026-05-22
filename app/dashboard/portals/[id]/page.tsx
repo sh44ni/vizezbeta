@@ -8,7 +8,7 @@ import {
   ArrowRight, Hand, Search, Globe, Layers, Clock, Loader, Inbox
 } from 'lucide-react';
 
-const BACKEND_URL = 'http://localhost:4000';
+const BACKEND_URL = '';
 
 interface PortalField {
   id: number;
