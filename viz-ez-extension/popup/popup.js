@@ -112,14 +112,30 @@ async function loadPortalList() {
   for (const p of allPortals) {
     // Skip if already listed as addon
     if (portalEntries.some(e => e.id === p.addon_id)) continue;
+    const portalKey = `portal-${p.id}`;
     const onPage = p.url_pattern && urlMatchesPattern(currentTabUrl, p.url_pattern);
+    const queuedApplicants = addonData[portalKey]?.applicants?.length || 0;
+
+    // If this portal already exists in portalEntries from addon loop, update it instead of adding duplicate
+    const existing = portalEntries.find(e => e.id === portalKey);
+    if (existing) {
+      existing.type = 'mapped';
+      existing.name = p.name;
+      existing.icon = '🌐';
+      existing.urlPattern = p.url_pattern;
+      existing.onPage = onPage;
+      existing.fieldCount = p.field_count || 0;
+      existing.backendId = p.id;
+      continue;
+    }
+
     portalEntries.push({
-      id: `portal-${p.id}`,
+      id: portalKey,
       backendId: p.id,
       type: 'mapped',
       name: p.name,
       icon: '🌐',
-      count: p.field_count || 0,
+      count: queuedApplicants || p.field_count || 0,
       urlPattern: p.url_pattern,
       onPage: onPage,
       fieldCount: p.field_count || 0,
@@ -175,6 +191,7 @@ async function loadPortalList() {
   for (const entry of portalEntries) {
     const card = document.createElement('div');
     card.className = `portal-card${entry.onPage ? ' on-page' : ''}`;
+    const queuedCount = addonData[entry.id]?.applicants?.length || 0;
     card.innerHTML = `
       <div class="portal-icon">${entry.icon}</div>
       <div class="portal-body">
@@ -182,11 +199,13 @@ async function loadPortalList() {
         <div class="portal-meta">
           ${entry.onPage ? '<span class="portal-on-page"><span class="pulse-dot"></span> On this page</span>' : ''}
           ${entry.type === 'addon' && entry.count > 0 ? `<span>${entry.count} applicant${entry.count !== 1 ? 's' : ''} queued</span>` : ''}
+          ${entry.type === 'mapped' && queuedCount > 0 ? `<span>${queuedCount} applicant${queuedCount !== 1 ? 's' : ''} queued</span>` : ''}
           ${entry.type === 'mapped' ? `<span>${entry.fieldCount} fields mapped</span>` : ''}
         </div>
       </div>
-      ${entry.type === 'addon' && entry.count > 0 ? `<span class="portal-count">${entry.count}</span>` : ''}
-      ${entry.type === 'addon' && entry.count === 0 ? '<span class="portal-count empty">0</span>' : ''}
+      ${queuedCount > 0 ? `<span class="portal-count">${queuedCount}</span>` : ''}
+      ${entry.type === 'addon' && entry.count > 0 && queuedCount === 0 ? `<span class="portal-count">${entry.count}</span>` : ''}
+      ${entry.type === 'addon' && entry.count === 0 && queuedCount === 0 ? '<span class="portal-count empty">0</span>' : ''}
       <svg class="portal-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
     `;
 

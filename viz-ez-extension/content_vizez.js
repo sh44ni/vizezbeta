@@ -136,17 +136,40 @@ window.addEventListener('message', (event) => {
     const queueWithStatus = queue.map(a => ({ ...a, status: 'pending' }));
 
     try {
-      // Use Promise API — avoids chrome.runtime.lastError callback pattern entirely
-      chrome.storage.local.set({ vizezFillQueue: queueWithStatus, vizezFillIdx: 0, vizezFillPortalId: portalId })
-        .then(() => {
-          console.log('[VizEz] Fill queue saved:', queue.length, 'applicants');
-          try { window.postMessage({ type: 'VIZEZ_QUEUE_SAVED', count: queue.length }, '*'); } catch {}
-        })
-        .catch(err => {
-          // Storage likely still succeeded; context invalidated mid-flight is harmless
-          console.log('[VizEz] Queue save (context change, data likely saved):', err?.message);
-          try { window.postMessage({ type: 'VIZEZ_QUEUE_SAVED', count: queue.length }, '*'); } catch {}
-        });
+      // Save to vizezFillQueue (legacy)
+      chrome.storage.local.set({ vizezFillQueue: queueWithStatus, vizezFillIdx: 0, vizezFillPortalId: portalId });
+
+      // Also save into vizezAddonData so the popup can find applicants
+      // Popup uses "portal-{id}" as the key for mapped portals
+      const addonKey = `portal-${portalId}`;
+      chrome.storage.local.get(['vizezAddonData'], (result) => {
+        const addonData = result.vizezAddonData || {};
+
+        // Build applicant entries with the data the popup/filler expects
+        const applicants = queueWithStatus.map(a => ({
+          name: a.name || 'Unknown',
+          nationality: a.nationality || '',
+          passport_number: a.passport_number || '',
+          data: a.payload || a,
+          status: 'pending',
+          timestamp: Date.now(),
+        }));
+
+        addonData[addonKey] = {
+          name: addonData[addonKey]?.name || 'Portal',
+          applicants: applicants,
+        };
+
+        chrome.storage.local.set({ vizezAddonData: addonData })
+          .then(() => {
+            console.log('[VizEz] Fill queue saved to addonData:', queue.length, 'applicants, key:', addonKey);
+            try { window.postMessage({ type: 'VIZEZ_QUEUE_SAVED', count: queue.length }, '*'); } catch {}
+          })
+          .catch(err => {
+            console.log('[VizEz] Queue save (context change, data likely saved):', err?.message);
+            try { window.postMessage({ type: 'VIZEZ_QUEUE_SAVED', count: queue.length }, '*'); } catch {}
+          });
+      });
     } catch (err) {
       console.warn('[VizEz] Context invalidated during queue save:', err.message);
       try { window.postMessage({ type: 'VIZEZ_QUEUE_SAVED', count: queue.length }, '*'); } catch {}
