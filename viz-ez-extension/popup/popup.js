@@ -367,7 +367,46 @@ function doFill() {
   fillBtn.style.color = '#000';
 
   // Load data into legacy storage for content scripts
-  chrome.storage.local.set({ vizezPassportData: app.data }, () => {
+  chrome.storage.local.set({ vizezPassportData: app.data }, async () => {
+    // ── Look up portal mapping before injecting ──
+    let mapping = null;
+    try {
+      if (activePortalId && activePortalId.startsWith('portal-')) {
+        const backendId = activePortalId.replace(/^portal-/, '');
+        // Try cached mappings first
+        const cached = await chrome.storage.local.get(['vizezMappings']);
+        const mappings = cached.vizezMappings || {};
+        if (mappings[backendId]) {
+          mapping = mappings[backendId];
+          console.log(`[VizEz Popup] Mapping found in cache for "${backendId}":`, mapping.name);
+        } else {
+          // Fallback: fetch from API
+          try {
+            const resp = await fetch(`${ACTIVE_API_BASE}/api/portals/${backendId}`);
+            const data = await resp.json();
+            if (data.portal) {
+              mapping = data.portal;
+              // Cache it for future use
+              mappings[backendId] = mapping;
+              chrome.storage.local.set({ vizezMappings: mappings });
+              console.log(`[VizEz Popup] Mapping fetched from API for "${backendId}":`, mapping.name);
+            }
+          } catch (fetchErr) {
+            console.warn('[VizEz Popup] Could not fetch mapping from API:', fetchErr.message);
+          }
+        }
+      }
+    } catch (mapErr) {
+      console.warn('[VizEz Popup] Mapping lookup failed:', mapErr.message);
+    }
+
+    // Store the active mapping for the content script to pick up
+    if (mapping) {
+      await chrome.storage.local.set({ vizezActiveMapping: mapping });
+    } else {
+      await chrome.storage.local.remove('vizezActiveMapping');
+    }
+
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (!tabs[0]?.id) {
         showToast('❌ No active tab found', 'error');
@@ -376,11 +415,9 @@ function doFill() {
       }
 
       const tabId = tabs[0].id;
-      const tabUrl = tabs[0].url || '';
 
-      // Determine which content script to inject based on portal
-      const isROP = tabUrl.includes('rop.gov.om');
-      const scriptFile = isROP ? 'content_rop.js' : 'content_filler.js';
+      // Always inject content_filler.js — it handles all portals via mappings
+      const scriptFile = 'content_filler.js';
 
       // Programmatically inject the content script to ensure it's loaded
       try {
@@ -398,7 +435,7 @@ function doFill() {
 
       // Small delay to let the script initialize
       setTimeout(() => {
-        chrome.tabs.sendMessage(tabId, { type: 'VIZEZ_AUTOFILL' }, (response) => {
+        chrome.tabs.sendMessage(tabId, { type: 'VIZEZ_AUTOFILL', hasMapping: !!mapping }, (response) => {
           if (chrome.runtime.lastError) {
             console.warn('[VizEz Popup] sendMessage error:', chrome.runtime.lastError.message);
             showToast('❌ Page not responding. Refresh the portal page and try again.', 'error');
@@ -420,7 +457,7 @@ function doFill() {
 
           if (response.status === 'filling') {
             const msg = response.filled
-              ? `✅ ${response.filled} fields filled! Sponsor fields in 2s...`
+              ? `✅ ${response.filled} fields filled!${response.mapping_used ? ' (mapped)' : ''}`
               : '✅ Filling in progress...';
             showToast(msg, 'success');
             app.status = 'filled';

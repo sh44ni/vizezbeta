@@ -149,9 +149,12 @@ YOUR TASK
    - The correct field type (text, select, date, checkbox, radio, textarea, file)
    - Whether it's truly required for form submission
    - A suggested source_key mapping to common document fields:
-     Passport fields: passport.surname, passport.given_names, passport.passport_number, passport.nationality, passport.date_of_birth, passport.gender, passport.place_of_birth, passport.issue_date, passport.expiry_date, passport.place_of_issue, passport.country
-     Work Permit fields: work_permit.employer, work_permit.pa_number, work_permit.civil_id, work_permit.occupation_code, work_permit.occupation_desc, work_permit.wfpa_number
-     If no mapping exists, use null.
+      Passport fields: passport.surname, passport.given_names, passport.passport_number, passport.nationality, passport.date_of_birth, passport.sex, passport.place_of_birth, passport.city_of_birth, passport.country_of_birth, passport.issue_date, passport.expiry_date, passport.place_of_issue, passport.country, passport.second_name, passport.third_name, passport.mother_name, passport.father_name
+      Work Permit fields: work_permit.employer, work_permit.pa_number, work_permit.civil_id, work_permit.occupation_code, work_permit.occupation_desc, work_permit.wfpa_number, work_permit.sponsor_phone, work_permit.sponsor_mobile, work_permit.sponsor_address, work_permit.sponsor_type, work_permit.relationship, work_permit.salary
+      Applicant fields: applicant.religion, applicant.marital_status, applicant.education, applicant.email, applicant.phone, applicant.mobile
+      Application fields: application.purpose, application.arrival_date, application.duration, application.visa_type, application.prev_visa
+      Submitter fields: submitter.name, submitter.civil_id, submitter.phone
+      If no mapping exists, use null.
    - Confidence (0.0-1.0) in the mapping
 
 3. For each NOISE field, explain why it was excluded (e.g., "Navigation search bar", "Login field", "Hidden CSRF token")

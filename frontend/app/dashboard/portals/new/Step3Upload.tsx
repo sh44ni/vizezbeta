@@ -121,17 +121,19 @@ export default function Step3Upload({ onNext, onBack, onExtractedData, onDocumen
     try {
       const fd = new FormData();
 
-      // Map slots to backend field names — passport and work_permit are the recognized keys
+      // Map slots to backend field names — only 'passport' and 'work_permit' are
+      // supported by the extraction API. Other document types (id_card, letter,
+      // booking, certificate, other) are stored in the portal config but cannot
+      // be AI-extracted yet — they are skipped here to avoid misclassification.
       for (const slot of slots) {
         if (!slot.file) continue;
         if (slot.type === 'passport') {
           fd.append('passport', slot.file);
         } else if (slot.type === 'work_permit') {
           fd.append('work_permit', slot.file);
-        } else {
-          // Additional documents — send as extra_docs for future backend support
-          fd.append('passport', slot.file); // fallback: treat first as passport for now
         }
+        // Other doc types are intentionally not sent to extraction.
+        // They are tracked in the document config for portal setup only.
       }
 
       fd.append('model', 'gpt-4o');

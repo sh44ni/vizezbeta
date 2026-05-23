@@ -41,6 +41,29 @@ const SOURCE_KEYS: SourceKeyOption[] = [
   { key: 'work_permit.sponsor_mobile', document: 'Work Permit', field: 'Sponsor Mobile', aliases: ['sponsor mobile', 'mobile number', 'sponsor cell'] },
   { key: 'work_permit.sponsor_address', document: 'Work Permit', field: 'Sponsor Address', aliases: ['sponsor address', 'company address', 'employer address'] },
   { key: 'work_permit.expiry_date', document: 'Work Permit', field: 'Permit Expiry', aliases: ['permit expiry', 'work permit expiry', 'wp expiry'] },
+  { key: 'passport.city_of_birth', document: 'Passport', field: 'City of Birth', aliases: ['city of birth', 'birth city', 'born in city'] },
+  { key: 'passport.country_of_birth', document: 'Passport', field: 'Country of Birth', aliases: ['country of birth', 'birth country', 'born in country'] },
+  { key: 'passport.second_name', document: 'Passport', field: 'Second Name', aliases: ['second name', 'middle name', 'second given name'] },
+  { key: 'passport.third_name', document: 'Passport', field: 'Third Name', aliases: ['third name', 'third given name'] },
+  { key: 'passport.mother_name', document: 'Passport', field: "Mother's Name", aliases: ['mother name', 'mothers name', 'mother'] },
+  { key: 'passport.father_name', document: 'Passport', field: "Father's Name", aliases: ['father name', 'fathers name', 'father'] },
+  { key: 'applicant.religion', document: 'Applicant', field: 'Religion', aliases: ['religion', 'faith', 'religious affiliation'] },
+  { key: 'applicant.marital_status', document: 'Applicant', field: 'Marital Status', aliases: ['marital status', 'marital', 'married', 'single'] },
+  { key: 'applicant.education', document: 'Applicant', field: 'Education Level', aliases: ['education', 'education level', 'qualification', 'highest education'] },
+  { key: 'applicant.email', document: 'Applicant', field: 'Email', aliases: ['email', 'email address', 'e-mail', 'electronic mail'] },
+  { key: 'applicant.phone', document: 'Applicant', field: 'Phone', aliases: ['phone', 'phone number', 'telephone', 'tel', 'contact number'] },
+  { key: 'applicant.mobile', document: 'Applicant', field: 'Mobile', aliases: ['mobile', 'mobile number', 'cell phone', 'cell', 'mobile phone'] },
+  { key: 'application.purpose', document: 'Application', field: 'Purpose of Visit', aliases: ['purpose of visit', 'purpose', 'reason for visit', 'travel purpose'] },
+  { key: 'application.arrival_date', document: 'Application', field: 'Arrival Date', aliases: ['arrival date', 'entry date', 'date of arrival', 'travel date'] },
+  { key: 'application.duration', document: 'Application', field: 'Duration of Stay', aliases: ['duration of stay', 'duration', 'length of stay', 'stay period'] },
+  { key: 'application.visa_type', document: 'Application', field: 'Visa Type', aliases: ['visa type', 'type of visa', 'visa category'] },
+  { key: 'application.prev_visa', document: 'Application', field: 'Previous Visa Number', aliases: ['previous visa', 'prior visa', 'old visa number'] },
+  { key: 'work_permit.sponsor_type', document: 'Work Permit', field: 'Sponsor Type', aliases: ['sponsor type', 'sponsorship type', 'individual or company'] },
+  { key: 'work_permit.relationship', document: 'Work Permit', field: 'Relationship', aliases: ['relationship', 'relation', 'sponsor relation', 'relation to sponsor'] },
+  { key: 'work_permit.salary', document: 'Work Permit', field: 'Salary', aliases: ['salary', 'wage', 'income', 'monthly salary'] },
+  { key: 'submitter.name', document: 'Submitter', field: 'Submitter Name', aliases: ['submitter name', 'submitted by', 'applicant name submitter', 'applying person'] },
+  { key: 'submitter.civil_id', document: 'Submitter', field: 'Submitter ID', aliases: ['submitter id', 'submitted by id', 'applicant id'] },
+  { key: 'submitter.phone', document: 'Submitter', field: 'Submitter Phone', aliases: ['submitter phone', 'submitter mobile', 'submitter gsm'] },
 ];
 
 /**
@@ -140,9 +163,9 @@ function determineFillMethod(type: string, hasSource: boolean): MatchResult['fil
 
 function isKnownManual(label: string): boolean {
   const manualPatterns = [
-    'captcha', 'mother', 'father', 'religion', 'email', 'mobile',
-    'phone number', 'arrival date', 'salary', 'marital', 'education',
-    'photograph', 'personal photo', 'previous visa',
+    'captcha', 'verification code',
+    'photograph', 'personal photo', 'upload photo',
+    'signature',
   ];
   return manualPatterns.some(p => label.includes(p));
 }

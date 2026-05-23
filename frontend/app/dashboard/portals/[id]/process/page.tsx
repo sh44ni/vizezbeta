@@ -3,7 +3,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, apiPost } from '@/lib/api';
 import {
   ArrowLeft, Upload, Loader, Zap, CheckCircle, X, AlertTriangle,
   Eye, ExternalLink, Users, Send,
@@ -26,6 +26,8 @@ interface Applicant {
   preview: string;
   status: 'pending' | 'extracting' | 'done' | 'error';
   data: Record<string, any> | null;
+  passportData?: Record<string, any>;
+  workPermitData?: Record<string, any>;
   error?: string;
 }
 
@@ -92,11 +94,13 @@ export default function ProcessPage() {
         const res = await apiFetch('/api/extract-manual', { method: 'POST', body: fd });
         if (!res.ok) throw new Error((await res.json()).error || 'Failed');
         const data = await res.json();
-        const merged = { ...data.passportData, ...data.workPermitData };
+        const passportData = data.passportData || {};
+        const workPermitData = data.workPermitData || {};
+        const merged = { ...passportData, ...workPermitData };
         const nameParts = [merged.first_name, merged.surname].filter(Boolean);
         merged._name = nameParts.length ? nameParts.join(' ') : `Applicant ${app.id}`;
         merged._mrzQuality = data._mrzQuality;
-        setApplicants(prev => prev.map(a => a.id === app.id ? { ...a, status: 'done', data: merged } : a));
+        setApplicants(prev => prev.map(a => a.id === app.id ? { ...a, status: 'done', data: merged, passportData, workPermitData } : a));
       } catch (err: any) {
         setApplicants(prev => prev.map(a => a.id === app.id ? { ...a, status: 'error', error: err.message } : a));
       }
@@ -111,9 +115,17 @@ export default function ProcessPage() {
       .filter(a => a.status === 'done' && a.data)
       .map(a => {
         const payload: Record<string, any> = {};
-        Object.entries(a.data!).forEach(([k, v]) => {
-          if (!k.startsWith('_')) payload[`passport.${k}`] = v;
-        });
+        // Prefix passport fields with 'passport.' and work permit fields with 'work_permit.'
+        if (a.passportData) {
+          Object.entries(a.passportData).forEach(([k, v]) => {
+            payload[`passport.${k}`] = v;
+          });
+        }
+        if (a.workPermitData) {
+          Object.entries(a.workPermitData).forEach(([k, v]) => {
+            payload[`work_permit.${k}`] = v;
+          });
+        }
         return {
           name: a.data!._name,
           nationality: a.data!.nationality,
@@ -126,14 +138,10 @@ export default function ProcessPage() {
     setSendError(null);
 
     try {
-      const res = await fetch('http://localhost:4000/api/fill-queue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          portal_id: portalId,
-          portal_name: portal?.name || 'Portal',
-          queue,
-        }),
+      const res = await apiPost('/api/fill-queue', {
+        portal_id: portalId,
+        portal_name: portal?.name || 'Portal',
+        queue,
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save queue');
       setSent(true);

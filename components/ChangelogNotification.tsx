@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Rocket, Blocks, ScanLine, Zap, BrainCircuit } from 'lucide-react';
 
-// ─── v3.0.0 Open Beta — Launch version ───
-const CURRENT_VERSION = '3.0.0';
+// ─── v3.1.1 — Extension & Lens Update ───
+const CURRENT_VERSION = '3.1.1';
 const STORAGE_KEY = 'vizez_changelog_ts';
 const SESSION_KEY = 'vizez_changelog_dismissed';
 const SHOW_DAYS = 14; // Show launch popup for 14 days
@@ -158,7 +158,7 @@ export default function ChangelogNotification() {
                 fontFamily: "'Outfit', 'Inter', sans-serif",
                 letterSpacing: '-0.3px',
               }}>
-                VizEz v3.0
+                VizEz v3.1
               </span>
               <span style={{
                 fontSize: '10px', fontWeight: 700, padding: '3px 10px', borderRadius: '99px',

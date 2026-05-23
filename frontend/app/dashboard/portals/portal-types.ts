@@ -1,6 +1,6 @@
 // ── Portal Mapping Types ──
 
-export type PortalStatus = 'active' | 'needs_remap' | 'in_progress';
+export type PortalStatus = 'active' | 'needs_remap' | 'needs_scan' | 'in_progress';
 
 export type PortalType = 'visa' | 'web_form' | 'multi_visa';
 

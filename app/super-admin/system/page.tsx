@@ -420,7 +420,7 @@ export default function SystemPage() {
             index={2}
             details={[
               { label: 'Engine', value: 'FastAPI / Python' },
-              { label: 'Version', value: 'v3.0.0' },
+              { label: 'Version', value: 'v3.1.1' },
             ]}
           />
           <ServiceCard
@@ -574,7 +574,7 @@ export default function SystemPage() {
               {
                 icon: <Code2 size={14} />,
                 label: 'App Version',
-                value: '3.0.0-open-beta',
+                value: '3.1.1',
               },
               {
                 icon: <Globe size={14} />,

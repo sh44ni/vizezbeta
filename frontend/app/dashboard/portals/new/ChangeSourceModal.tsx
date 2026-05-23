@@ -5,19 +5,27 @@ import { Search, X, ArrowRight } from 'lucide-react';
 
 // All available VizEz source keys for manual field assignment
 const SOURCE_FIELDS = [
+  // ── Passport ──
   { key: 'passport.full_name', document: 'Passport', field: 'Full Name' },
   { key: 'passport.surname', document: 'Passport', field: 'Surname' },
   { key: 'passport.given_names', document: 'Passport', field: 'Given Names' },
+  { key: 'passport.second_name', document: 'Passport', field: 'Second Name' },
+  { key: 'passport.third_name', document: 'Passport', field: 'Third Name' },
   { key: 'passport.passport_number', document: 'Passport', field: 'Passport Number' },
   { key: 'passport.nationality', document: 'Passport', field: 'Nationality' },
   { key: 'passport.date_of_birth', document: 'Passport', field: 'Date of Birth' },
   { key: 'passport.sex', document: 'Passport', field: 'Sex' },
   { key: 'passport.place_of_birth', document: 'Passport', field: 'Place of Birth' },
+  { key: 'passport.city_of_birth', document: 'Passport', field: 'City of Birth' },
+  { key: 'passport.country_of_birth', document: 'Passport', field: 'Country of Birth' },
   { key: 'passport.issue_date', document: 'Passport', field: 'Issue Date' },
   { key: 'passport.expiry_date', document: 'Passport', field: 'Expiry Date' },
   { key: 'passport.place_of_issue', document: 'Passport', field: 'Place of Issue' },
   { key: 'passport.issuing_authority', document: 'Passport', field: 'Issuing Authority' },
   { key: 'passport.country', document: 'Passport', field: 'Country' },
+  { key: 'passport.mother_name', document: 'Passport', field: "Mother's Name" },
+  { key: 'passport.father_name', document: 'Passport', field: "Father's Name" },
+  // ── Work Permit ──
   { key: 'work_permit.employer', document: 'Work Permit', field: 'Employer' },
   { key: 'work_permit.pa_number', document: 'Work Permit', field: 'PA Number' },
   { key: 'work_permit.civil_id', document: 'Work Permit', field: 'Civil ID' },
@@ -28,6 +36,26 @@ const SOURCE_FIELDS = [
   { key: 'work_permit.sponsor_mobile', document: 'Work Permit', field: 'Sponsor Mobile' },
   { key: 'work_permit.sponsor_address', document: 'Work Permit', field: 'Sponsor Address' },
   { key: 'work_permit.expiry_date', document: 'Work Permit', field: 'Permit Expiry' },
+  { key: 'work_permit.sponsor_type', document: 'Work Permit', field: 'Sponsor Type' },
+  { key: 'work_permit.relationship', document: 'Work Permit', field: 'Relationship' },
+  { key: 'work_permit.salary', document: 'Work Permit', field: 'Salary' },
+  // ── Applicant ──
+  { key: 'applicant.religion', document: 'Applicant', field: 'Religion' },
+  { key: 'applicant.marital_status', document: 'Applicant', field: 'Marital Status' },
+  { key: 'applicant.education', document: 'Applicant', field: 'Education Level' },
+  { key: 'applicant.email', document: 'Applicant', field: 'Email' },
+  { key: 'applicant.phone', document: 'Applicant', field: 'Phone' },
+  { key: 'applicant.mobile', document: 'Applicant', field: 'Mobile' },
+  // ── Application ──
+  { key: 'application.purpose', document: 'Application', field: 'Purpose of Visit' },
+  { key: 'application.arrival_date', document: 'Application', field: 'Arrival Date' },
+  { key: 'application.duration', document: 'Application', field: 'Duration of Stay' },
+  { key: 'application.visa_type', document: 'Application', field: 'Visa Type' },
+  { key: 'application.prev_visa', document: 'Application', field: 'Previous Visa Number' },
+  // ── Submitter ──
+  { key: 'submitter.name', document: 'Submitter', field: 'Submitter Name' },
+  { key: 'submitter.civil_id', document: 'Submitter', field: 'Submitter ID' },
+  { key: 'submitter.phone', document: 'Submitter', field: 'Submitter Phone' },
 ];
 
 interface Props {
