@@ -1,4 +1,6 @@
 import { enhancePassportImage } from '../lib/passport-enhance.js';
+import { logToLens } from '../lib/lens-integration.js';
+import { randomUUID } from 'crypto';
 
 
 // ─────────────────────────────────────────────────────
@@ -559,6 +561,9 @@ export async function handleExtractManual(req, res, { files }) {
     return json(res, 500, { error: 'OPENAI_API_KEY not configured.' });
   }
 
+  const lensRequestId = randomUUID().slice(0, 8);
+  const lensStartTime = Date.now();
+
   try {
     // Files come from formidable
     const passportFile = files?.passport?.[0];
@@ -821,8 +826,41 @@ export async function handleExtractManual(req, res, { files }) {
           }
         : { enhanced: false },
     });
+
+    // Log to Lens (non-blocking)
+    const lensProcessingTime = Date.now() - lensStartTime;
+    logToLens({
+      requestId: lensRequestId,
+      filename: passportFile.originalFilename || 'passport',
+      fileSizeBytes: passportBuf.length,
+      sourceFormat: passportFile.mimetype?.includes('pdf') ? 'pdf' : 'image',
+      documentType: enhancement.metrics?.document_type || 'passport',
+      classificationConfidence: enhancement.metrics?.classification?.confidence || 0,
+      cropApplied: enhancement.metrics?.crop_applied || false,
+      cropMethod: enhancement.metrics?.crop_metadata?.crop_method || null,
+      cropConfidence: enhancement.metrics?.crop_metadata?.crop_confidence || 0,
+      originalQualityScore: enhancement.metrics?.original_quality?.overall_score || enhancement.metrics?.originalQuality?.overall_score || 0,
+      enhancedQualityScore: enhancement.metrics?.enhanced_quality?.overall_score || enhancement.metrics?.enhancedQuality?.overall_score || 0,
+      qualityImprovement: (enhancement.metrics?.enhanced_quality?.overall_score || enhancement.metrics?.enhancedQuality?.overall_score || 0) - (enhancement.metrics?.original_quality?.overall_score || enhancement.metrics?.originalQuality?.overall_score || 0),
+      readyForExtraction: enhancement.metrics?.ready_for_extraction || enhancement.metrics?.readyForExtraction || false,
+      processingTimeMs: lensProcessingTime,
+      processedBy: 'extract-manual',
+      status: 'success',
+    });
   } catch (error) {
     const err = error;
+    const lensProcessingTime = Date.now() - lensStartTime;
+    logToLens({
+      requestId: lensRequestId,
+      filename: files?.passport?.[0]?.originalFilename || 'unknown',
+      fileSizeBytes: 0,
+      sourceFormat: 'unknown',
+      documentType: 'passport',
+      processingTimeMs: lensProcessingTime,
+      processedBy: 'extract-manual',
+      status: 'error',
+      errorMessage: err.message,
+    });
     console.error('extract-manual route error:', err.message);
     return json(res, 500, { error: err.message || 'Unknown server error.' });
   }

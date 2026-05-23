@@ -10,6 +10,7 @@ import { handleExtract } from './routes/extract.js';
 import { handleExtractManual } from './routes/extract-manual.js';
 import { handleEnhancePreview } from './routes/enhance-preview.js';
 import { handleGetPassportLogs, handlePostPassportLogs } from './routes/passport-logs.js';
+import { ensureLensTables } from './lib/lens-integration.js';
 import { handleDbInit } from './routes/db-init.js';
 import { handleGetApplicants, handleGetApplicantById, handlePostApplicant } from './routes/applicants.js';
 import { handleGetPortals, handleGetPortalById, handleCreatePortal, handleUpdatePortal, handleUpdatePortalFields, handleDeletePortal } from './routes/portals.js';
@@ -247,6 +248,7 @@ const server = http.createServer(async (req, res) => {
 async function start() {
   try {
     await ensureTables();
+    await ensureLensTables();
     server.listen(PORT, () => {
       console.log(`\n  ╔══════════════════════════════════════════╗`);
       console.log(`  ║  VizEz Backend — http://localhost:${PORT}   ║`);

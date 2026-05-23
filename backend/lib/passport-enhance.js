@@ -11,6 +11,7 @@
 const PROCESSOR_URL = process.env.PASSPORT_PROCESSOR_URL || 'http://localhost:8000';
 const ENHANCE_ENDPOINT = `${PROCESSOR_URL}/api/v1/enhance`;
 const TIMEOUT_MS = 30_000; // 30s — image processing can be slow
+const PROCESSOR_SECRET = process.env.PROCESSOR_SECRET || '';
 
 /**
  * Enhance a document image through the Vizez Document Expert pipeline.
@@ -35,8 +36,14 @@ export async function enhancePassportImage(fileBuffer, fileName, mimeType) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
+    const headers = {};
+    if (PROCESSOR_SECRET) {
+      headers['X-Processor-Key'] = PROCESSOR_SECRET;
+    }
+
     const response = await fetch(ENHANCE_ENDPOINT, {
       method: 'POST',
+      headers,
       body: formData,
       signal: controller.signal,
     });

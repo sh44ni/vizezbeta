@@ -14,9 +14,11 @@ Interactive docs:
 """
 
 import logging
+import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from routers.enhance import router as enhance_router
 
@@ -52,6 +54,24 @@ app.add_middleware(
 )
 
 app.include_router(enhance_router, prefix="/api/v1", tags=["Document Expert"])
+
+# ── Processor Secret Authentication ──
+PROCESSOR_SECRET = os.environ.get("PROCESSOR_SECRET", "")
+
+@app.middleware("http")
+async def verify_processor_key(request: Request, call_next):
+    """Reject unauthenticated requests to /api/v1/* endpoints."""
+    if request.url.path.startswith("/api/v1"):
+        if not PROCESSOR_SECRET:
+            # No secret configured — allow (dev mode)
+            return await call_next(request)
+        token = request.headers.get("X-Processor-Key", "")
+        if token != PROCESSOR_SECRET:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid or missing processor key"},
+            )
+    return await call_next(request)
 
 
 @app.get("/", tags=["Root"])

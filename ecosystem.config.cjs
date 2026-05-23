@@ -27,5 +27,18 @@ module.exports = {
       autorestart: true,
       max_memory_restart: '256M',
     },
+    {
+      name: 'vizez-lens',
+      cwd: './lens',
+      script: 'node_modules/.bin/next',
+      args: 'start -p 3002',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3002,
+      },
+      instances: 1,
+      autorestart: true,
+      max_memory_restart: '512M',
+    },
   ],
 };
