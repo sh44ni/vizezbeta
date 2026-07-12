@@ -116,20 +116,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return true;
       }
     } catch {
-      // Fallback: if DB is down, allow admin login with hardcoded creds
-      if (username === FALLBACK_ADMIN.username && password === FALLBACK_ADMIN_PW) {
-        setUser(FALLBACK_ADMIN);
-        try {
-          localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify({
-            username: FALLBACK_ADMIN.username,
-            name: FALLBACK_ADMIN.name,
-            role: FALLBACK_ADMIN.role,
-            day: todayKey(),
-          }));
-        } catch {}
-        return true;
-      }
+      // Ignored: network error or invalid JSON
     }
+
+    // Fallback: if DB is down or admin user is not in the database yet
+    if (username === FALLBACK_ADMIN.username && password === FALLBACK_ADMIN_PW) {
+      setUser(FALLBACK_ADMIN);
+      try {
+        localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify({
+          username: FALLBACK_ADMIN.username,
+          name: FALLBACK_ADMIN.name,
+          role: FALLBACK_ADMIN.role,
+          day: todayKey(),
+        }));
+      } catch {}
+      return true;
+    }
+
     return false;
   }, []);
 

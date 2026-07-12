@@ -6,8 +6,10 @@ import {
   UploadCloud, X, ArrowRight, ArrowLeft, Info, CheckCircle2, AlertCircle,
   Clock, Loader2, Copy, Check, AlertTriangle, Cpu, Zap, Shield, Eye, Send,
   Brain, Sparkles, ShieldCheck, ShieldAlert, HelpCircle, Trash2, ImageUp,
-  RefreshCw, FileText, CircleDot,
+  RefreshCw, FileText, CircleDot, Download,
 } from 'lucide-react';
+import AutoSubmitModal from '@/components/AutoSubmitModal';
+import jsPDF from 'jspdf';
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // TYPES
@@ -176,6 +178,59 @@ function UploadStep({
           : x,
       ),
     );
+  };
+
+  const handlePhotoFile = async (id: string, file: File) => {
+    let finalFile = file;
+
+    if (file.type === 'application/pdf') {
+      try {
+        finalFile = await pdfToImage(file);
+      } catch (err) {
+        console.error('PDF rendering error:', err);
+        alert('Failed to read PDF. Try uploading an image instead.');
+        return;
+      }
+    }
+
+    try {
+      // Show loading state by setting the uncropped preview temporarily
+      setItems((prev) =>
+        prev.map((x) =>
+          x.id === id
+            ? { ...x, photoFile: finalFile, photoPreviewUrl: URL.createObjectURL(finalFile) }
+            : x,
+        ),
+      );
+
+      const formData = new FormData();
+      formData.append('photo', finalFile);
+      const res = await fetch('/api/process-photo', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.dataUrl) {
+          // Convert dataUrl back to a File to store in state
+          const fetchRes = await fetch(json.dataUrl);
+          const blob = await fetchRes.blob();
+          const croppedFile = new File([blob], `cropped_${finalFile.name}.jpg`, { type: 'image/jpeg' });
+          
+          setItems((prev) =>
+            prev.map((x) =>
+              x.id === id
+                ? { ...x, photoFile: croppedFile, photoPreviewUrl: URL.createObjectURL(croppedFile) }
+                : x,
+            ),
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Error auto-cropping photo:', err);
+      // Fallback to original
+    }
   };
 
   const canProceed = items.length > 0 && items.every((x) => x.passportFile);
@@ -369,6 +424,15 @@ function UploadStep({
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleWpFile(item.id, f); }}
                 />
                 {item.workPermitFile ? 'Change WP' : '+ Work Permit'}
+              </label>
+
+              {/* Add photo */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0 }}>
+                <input
+                  type="file" accept="image/*,.pdf" style={{ display: 'none' }}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoFile(item.id, f); }}
+                />
+                {item.photoFile ? 'Change Photo' : '+ Photo'}
               </label>
 
               {/* Remove */}
@@ -741,8 +805,10 @@ function ExtractStep({
 
         let passportImageDataUrl = '';
         let workPermitImageDataUrl = '';
+        let photoImageDataUrl = '';
         if (item.passportFile) passportImageDataUrl = await fileToDataUrl(item.passportFile);
         if (item.workPermitFile) workPermitImageDataUrl = await fileToDataUrl(item.workPermitFile);
+        if (item.photoFile) photoImageDataUrl = await fileToDataUrl(item.photoFile);
 
         // Capture validation warnings from server
         const validationWarnings: string[] = data._validation || [];
@@ -755,7 +821,7 @@ function ExtractStep({
         setItems((prev) =>
           prev.map((x) =>
             x.id === item.id
-              ? { ...x, status: 'extracted', extractionStage: 'done', progress: 100, passportData: data.passportData, workPermitData: data.workPermitData, passportImageDataUrl, workPermitImageDataUrl, validationWarnings: [...mrzOverrides, ...validationWarnings], fieldVerification, mrzQuality, enhancedImageUrl: enhancedImgUrl }
+              ? { ...x, status: 'extracted', extractionStage: 'done', progress: 100, passportData: data.passportData, workPermitData: data.workPermitData, passportImageDataUrl, workPermitImageDataUrl, photoImageDataUrl, validationWarnings: [...mrzOverrides, ...validationWarnings], fieldVerification, mrzQuality, enhancedImageUrl: enhancedImgUrl }
               : x,
           ),
         );
@@ -900,6 +966,7 @@ function ExtractStep({
                   </button>
                 )}
                 {item.workPermitFile && <span style={{ fontSize: '8px', padding: '2px 5px', borderRadius: '4px', background: 'var(--accent-subtle)', color: 'var(--accent)', fontWeight: 700, flexShrink: 0 }}>+WP</span>}
+                {item.photoFile && <span style={{ fontSize: '8px', padding: '2px 5px', borderRadius: '4px', background: 'var(--accent-subtle)', color: 'var(--accent)', fontWeight: 700, flexShrink: 0 }}>+Photo</span>}
               </div>
             );
           })}
@@ -1001,6 +1068,8 @@ function ReviewStep({
   onClear: () => void;
 }) {
   const [selectedId, setSelectedId] = useState<string>(items.find((x) => x.status === 'extracted')?.id || '');
+  const [submitMode, setSubmitMode] = useState<'legacy' | 'auto'>('legacy');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const selected = items.find((x) => x.id === selectedId);
 
@@ -1238,54 +1307,115 @@ function ReviewStep({
         </div>
 
         {/* Right: Send to extension */}
-        <button
-          onClick={() => {
-            if (!selected) {
-              alert('No applicant selected. Select one from the list first.');
-              return;
-            }
-            if (!selected.passportData) {
-              alert('No passport data found for this applicant. Did extraction complete?');
-              return;
-            }
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', background: 'var(--surface-2)', padding: '4px', borderRadius: 'var(--radius-lg)' }}>
+            <button
+              onClick={() => setSubmitMode('legacy')}
+              style={{
+                padding: '8px 16px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                borderRadius: 'var(--radius-md)', transition: 'all 0.2s',
+                background: submitMode === 'legacy' ? 'var(--card-bg)' : 'transparent',
+                color: submitMode === 'legacy' ? 'var(--text-primary)' : 'var(--text-muted)',
+                boxShadow: submitMode === 'legacy' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+              }}
+            >
+              Legacy Mode
+            </button>
+            <button
+              onClick={() => setSubmitMode('auto')}
+              style={{
+                padding: '8px 16px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                borderRadius: 'var(--radius-md)', transition: 'all 0.2s',
+                background: submitMode === 'auto' ? 'var(--card-bg)' : 'transparent',
+                color: submitMode === 'auto' ? 'var(--text-primary)' : 'var(--text-muted)',
+                boxShadow: submitMode === 'auto' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+              }}
+            >
+              Auto Submit Mode
+            </button>
+          </div>
 
-            // Build the payload — be careful NOT to let work permit fields clobber
-            // passport fields that share the same key name (e.g. both have expiry_date).
-            // We rename the WP expiry_date → wp_expiry_date before merging.
-            const { expiry_date: _wpExpiry, ...wpFieldsRest } = selected.workPermitData || {};
-            const payload = {
-              ...selected.passportData,       // passport fields (including passport expiry_date)
-              ...wpFieldsRest,                // WP fields minus expiry_date (no collision)
-              wp_expiry_date: _wpExpiry || '', // WP expiry stored separately
-              // Document images for preview on the portal
-              _passportImageUrl: selected.passportImageDataUrl || '',
-              _workPermitImageUrl: selected.workPermitImageDataUrl || '',
-            };
+          <button
+            onClick={() => {
+              if (submitMode === 'auto') {
+                const extracted = items.filter(x => x.status === 'extracted');
+                if (extracted.length === 0) {
+                  alert('No extracted data to submit.');
+                  return;
+                }
+                setIsModalOpen(true);
+                return;
+              }
 
+              if (!selected) {
+                alert('No applicant selected. Select one from the list first.');
+                return;
+              }
+              if (!selected.passportData) {
+                alert('No passport data found for this applicant. Did extraction complete?');
+                return;
+              }
 
-            console.log('VizEz: Dispatching data to extension via postMessage. Keys:', Object.keys(payload));
-            window.postMessage({
-              type: 'VIZEZ_SEND_TO_EXTENSION',
-              addon: {
-                id: 'rop-evisa',
-                name: 'ROP eVisa Manual Filler',
-              },
-              payload,
-            }, '*');
+              // Build the payload — be careful NOT to let work permit fields clobber
+              // passport fields that share the same key name (e.g. both have expiry_date).
+              // We rename the WP expiry_date → wp_expiry_date before merging.
+              const { expiry_date: _wpExpiry, ...wpFieldsRest } = selected.workPermitData || {};
+              const payload = {
+                ...selected.passportData,       // passport fields (including passport expiry_date)
+                ...wpFieldsRest,                // WP fields minus expiry_date (no collision)
+                wp_expiry_date: _wpExpiry || '', // WP expiry stored separately
+                // Document images for preview on the portal
+                _passportImageUrl: selected.passportImageDataUrl || '',
+                _workPermitImageUrl: selected.workPermitImageDataUrl || '',
+              };
 
-            // If the extension content script is loaded, it will show its own alert.
-            // If nothing happens after 2s, the extension likely isn't installed/active.
-            setTimeout(() => {
-              // This timeout is just a fallback hint â€” the extension alert will appear first if it's working
-            }, 2500);
-          }}
-          disabled={!selected}
-          className="btn-primary"
-          style={!selected ? { background: 'var(--surface-2)', color: 'var(--text-muted)', boxShadow: 'none', cursor: 'not-allowed' } : {}}
-        >
-          Send to Portal <ArrowRight className="w-4 h-4" />
-        </button>
+              console.log('VizEz: Dispatching data to extension via postMessage. Keys:', Object.keys(payload));
+              window.postMessage({
+                type: 'VIZEZ_SEND_TO_EXTENSION',
+                addon: {
+                  id: 'rop-evisa',
+                  name: 'ROP eVisa Manual Filler',
+                },
+                payload,
+              }, '*');
+
+              // If the extension content script is loaded, it will show its own alert.
+              // If nothing happens after 2s, the extension likely isn't installed/active.
+              setTimeout(() => {
+                // This timeout is just a fallback hint â€” the extension alert will appear first if it's working
+              }, 2500);
+            }}
+            disabled={submitMode === 'legacy' && !selected}
+            className="btn-primary"
+            style={submitMode === 'legacy' && !selected ? { background: 'var(--surface-2)', color: 'var(--text-muted)', boxShadow: 'none', cursor: 'not-allowed' } : {}}
+          >
+            {submitMode === 'auto' ? (
+              <><Zap className="w-4 h-4" /> Start Auto Submission</>
+            ) : (
+              <>Send to Portal <ArrowRight className="w-4 h-4" /></>
+            )}
+          </button>
+        </div>
       </div>
+
+      <AutoSubmitModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        applicants={items.filter(x => x.status === 'extracted').map(item => {
+          const { expiry_date: _wpExpiry, ...wpFieldsRest } = item.workPermitData || {};
+          return {
+            data: {
+              ...item.passportData,
+              ...wpFieldsRest,
+              wp_expiry_date: _wpExpiry || '',
+              _passportImageUrl: item.passportImageDataUrl || '',
+              _workPermitImageUrl: item.workPermitImageDataUrl || '',
+              _name: `${item.passportData?.first_name || ''} ${item.passportData?.surname || ''}`.trim()
+            }
+          };
+        })}
+        portalId=""
+      />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { handleGetUsers, handlePostUsers } from './routes/users.js';
 import { handleExtract } from './routes/extract.js';
 import { handleExtractManual } from './routes/extract-manual.js';
 import { handleEnhancePreview } from './routes/enhance-preview.js';
+import { handleProcessPhoto } from './routes/photo.js';
 import { handleGetPassportLogs, handlePostPassportLogs } from './routes/passport-logs.js';
 import { ensureLensTables } from './lib/lens-integration.js';
 import { handleDbInit } from './routes/db-init.js';
@@ -16,6 +17,7 @@ import { handleGetApplicants, handleGetApplicantById, handlePostApplicant } from
 import { handleGetPortals, handleGetPortalById, handleCreatePortal, handleUpdatePortal, handleUpdatePortalFields, handleDeletePortal } from './routes/portals.js';
 import { handleAnalyzeFields } from './routes/analyze-fields.js';
 import { handleGetAddons, handleRequestAddon, handleGetAddonRequests, handleReviewAddonRequest, handleToggleAddonAccess, handleGetAddonAccess } from './routes/addons.js';
+import { handleRopAutoSubmitInit, handleRopAutoSubmitConfirm } from './routes/rop-auto-submit.js';
 
 const PORT = process.env.PORT || 4000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
@@ -132,6 +134,12 @@ const server = http.createServer(async (req, res) => {
       return handleEnhancePreview(req, res, { fields, files });
     }
 
+    // ── /api/process-photo ──
+    if (path === '/api/process-photo' && method === 'POST') {
+      const { fields, files } = await parseMultipart(req);
+      return handleProcessPhoto(req, res, { files });
+    }
+
     // ── /api/passport-logs ──
     if (path === '/api/passport-logs') {
       if (method === 'GET') return handleGetPassportLogs(req, res, url);
@@ -229,6 +237,15 @@ const server = http.createServer(async (req, res) => {
     }
     if (path === '/api/addons/access' && method === 'GET') {
       return handleGetAddonAccess(req, res);
+    }
+
+    // ── /api/rop/auto-submit ──
+    if (path === '/api/rop/auto-submit/init' && method === 'GET') {
+      return handleRopAutoSubmitInit(req, res);
+    }
+    if (path === '/api/rop/auto-submit/confirm' && method === 'POST') {
+      const body = await parseJSONBody(req);
+      return handleRopAutoSubmitConfirm(req, res, body);
     }
 
     // ── Health check ──

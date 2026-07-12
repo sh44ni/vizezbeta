@@ -8,6 +8,7 @@ import {
   Brain, Sparkles, ShieldCheck, ShieldAlert, HelpCircle, Trash2, ImageUp,
   RefreshCw, FileText, CircleDot,
 } from 'lucide-react';
+import AutoSubmitModal from '@/app/dashboard/portals/[id]/process/AutoSubmitModal';
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // TYPES
@@ -1001,6 +1002,8 @@ function ReviewStep({
   onClear: () => void;
 }) {
   const [selectedId, setSelectedId] = useState<string>(items.find((x) => x.status === 'extracted')?.id || '');
+  const [submitMode, setSubmitMode] = useState<'legacy' | 'auto'>('legacy');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const selected = items.find((x) => x.id === selectedId);
 
@@ -1237,50 +1240,107 @@ function ReviewStep({
           </button>
         </div>
 
-        {/* Right: Send to extension */}
-        <button
-          onClick={() => {
-            if (!selected) {
-              alert('No applicant selected. Select one from the list first.');
-              return;
-            }
-            if (!selected.passportData) {
-              alert('No passport data found for this applicant. Did extraction complete?');
-              return;
-            }
+        {/* Right: Send to extension / Auto Submit */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', background: 'var(--surface-2)', padding: '4px', borderRadius: 'var(--radius-lg)' }}>
+            <button
+              onClick={() => setSubmitMode('legacy')}
+              style={{
+                padding: '8px 16px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                borderRadius: 'var(--radius-md)', transition: 'all 0.2s',
+                background: submitMode === 'legacy' ? 'var(--card-bg)' : 'transparent',
+                color: submitMode === 'legacy' ? 'var(--text-primary)' : 'var(--text-muted)',
+                boxShadow: submitMode === 'legacy' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+              }}
+            >
+              Legacy Mode
+            </button>
+            <button
+              onClick={() => setSubmitMode('auto')}
+              style={{
+                padding: '8px 16px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                borderRadius: 'var(--radius-md)', transition: 'all 0.2s',
+                background: submitMode === 'auto' ? 'var(--card-bg)' : 'transparent',
+                color: submitMode === 'auto' ? 'var(--text-primary)' : 'var(--text-muted)',
+                boxShadow: submitMode === 'auto' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+              }}
+            >
+              Auto Submit Mode
+            </button>
+          </div>
 
-            // Build the payload — be careful NOT to let work permit fields clobber
-            // passport fields that share the same key name (e.g. both have expiry_date).
-            // We rename the WP expiry_date → wp_expiry_date before merging.
-            const { expiry_date: _wpExpiry, ...wpFieldsRest } = selected.workPermitData || {};
-            const payload = {
-              ...selected.passportData,       // passport fields (including passport expiry_date)
-              ...wpFieldsRest,                // WP fields minus expiry_date (no collision)
-              wp_expiry_date: _wpExpiry || '', // WP expiry stored separately
-              // Document images for preview on the portal
-              _passportImageUrl: selected.passportImageDataUrl || '',
-              _workPermitImageUrl: selected.workPermitImageDataUrl || '',
-            };
+          <button
+            onClick={() => {
+              if (submitMode === 'auto') {
+                const extracted = items.filter(x => x.status === 'extracted');
+                if (extracted.length === 0) {
+                  alert('No extracted data to submit.');
+                  return;
+                }
+                setIsModalOpen(true);
+                return;
+              }
 
-            console.log('VizEz: Dispatching data to extension via postMessage. Keys:', Object.keys(payload));
-            window.postMessage({
-              type: 'VIZEZ_SEND_TO_EXTENSION',
-              payload,
-            }, '*');
+              // Legacy Mode Submission
+              if (!selected) {
+                alert('No applicant selected. Select one from the list first.');
+                return;
+              }
+              if (!selected.passportData) {
+                alert('No passport data found for this applicant. Did extraction complete?');
+                return;
+              }
 
-            // If the extension content script is loaded, it will show its own alert.
-            // If nothing happens after 2s, the extension likely isn't installed/active.
-            setTimeout(() => {
-              // This timeout is just a fallback hint â€” the extension alert will appear first if it's working
-            }, 2500);
-          }}
-          disabled={!selected}
-          className="btn-primary"
-          style={!selected ? { background: 'var(--surface-2)', color: 'var(--text-muted)', boxShadow: 'none', cursor: 'not-allowed' } : {}}
-        >
-          Send to Portal AutoFiller <ArrowRight className="w-4 h-4" />
-        </button>
+              const { expiry_date: _wpExpiry, ...wpFieldsRest } = selected.workPermitData || {};
+              const payload = {
+                ...selected.passportData,       // passport fields
+                ...wpFieldsRest,                // WP fields minus expiry_date
+                wp_expiry_date: _wpExpiry || '', // WP expiry stored separately
+                _passportImageUrl: selected.passportImageDataUrl || '',
+                _workPermitImageUrl: selected.workPermitImageDataUrl || '',
+              };
+
+              console.log('VizEz: Dispatching data to extension via postMessage. Keys:', Object.keys(payload));
+              window.postMessage({
+                type: 'VIZEZ_SEND_TO_EXTENSION',
+                payload,
+              }, '*');
+
+              setTimeout(() => {
+                // fallback hint timeout
+              }, 2500);
+            }}
+            disabled={submitMode === 'legacy' && !selected}
+            className="btn-friendly"
+            style={submitMode === 'legacy' && !selected ? { background: 'var(--surface-2)', color: 'var(--text-muted)', boxShadow: 'none', cursor: 'not-allowed' } : {}}
+          >
+            {submitMode === 'auto' ? (
+              <><Zap className="w-4 h-4" /> Start Auto Submission</>
+            ) : (
+              <>Send to Portal AutoFiller <ArrowRight className="w-4 h-4" /></>
+            )}
+          </button>
+        </div>
       </div>
+
+      <AutoSubmitModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        applicants={items.filter(x => x.status === 'extracted').map(item => {
+          const { expiry_date: _wpExpiry, ...wpFieldsRest } = item.workPermitData || {};
+          return {
+            data: {
+              ...item.passportData,
+              ...wpFieldsRest,
+              wp_expiry_date: _wpExpiry || '',
+              _passportImageUrl: item.passportImageDataUrl || '',
+              _workPermitImageUrl: item.workPermitImageDataUrl || '',
+              _name: `${item.passportData?.first_name || ''} ${item.passportData?.surname || ''}`.trim()
+            }
+          };
+        })}
+        portalId=""
+      />
     </div>
   );
 }

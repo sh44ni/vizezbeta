@@ -9,8 +9,8 @@ export async function apiFetch(path: string, options?: RequestInit): Promise<Res
 }
 
 /**
- * Shorthand for JSON POST requests.
- */
+ * Shorthand for JSON POST requests.*/
+
 export async function apiPost(path: string, body: unknown): Promise<Response> {
   return apiFetch(path, {
     method: 'POST',

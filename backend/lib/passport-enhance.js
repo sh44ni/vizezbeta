@@ -102,3 +102,65 @@ export async function enhancePassportImage(fileBuffer, fileName, mimeType) {
     return { dataUrl: fallbackDataUrl, wasEnhanced: false, metrics: null };
   }
 }
+
+/**
+ * Intelligently crop a photo to a standard passport aspect ratio centered on the face.
+ *
+ * @param {Buffer} fileBuffer  Raw file bytes
+ * @param {string} fileName    Original filename
+ * @param {string} mimeType    MIME type
+ * @returns {Promise<{dataUrl: string, wasCropped: boolean, metrics: object|null}>}
+ */
+export async function cropApplicantPhoto(fileBuffer, fileName, mimeType) {
+  const originalB64 = fileBuffer.toString('base64');
+  const fallbackDataUrl = `data:${mimeType};base64,${originalB64}`;
+
+  try {
+    const blob = new Blob([new Uint8Array(fileBuffer)], { type: mimeType });
+    const formData = new FormData();
+    formData.append('file', blob, fileName);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+    const headers = {};
+    if (PROCESSOR_SECRET) {
+      headers['X-Processor-Key'] = PROCESSOR_SECRET;
+    }
+
+    const response = await fetch(`${PROCESSOR_URL}/api/v1/crop-photo`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => 'unknown error');
+      console.warn(`[photo-cropper] Processor returned ${response.status}: ${errText}. Falling back.`);
+      return { dataUrl: fallbackDataUrl, wasCropped: false, metrics: null };
+    }
+
+    const data = await response.json();
+    const croppedDataUrl = `data:image/jpeg;base64,${data.cropped_image}`;
+
+    console.log(`[photo-cropper] ✓ Cropped photo "${fileName}" in ${data._processing_time_ms}ms`);
+
+    return {
+      dataUrl: croppedDataUrl,
+      wasCropped: true,
+      metrics: {
+        processingTimeMs: data._processing_time_ms || 0,
+      },
+    };
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.warn(`[photo-cropper] Processor timed out after ${TIMEOUT_MS}ms. Falling back.`);
+    } else {
+      console.warn(`[photo-cropper] Processor unreachable (${error.message}). Falling back.`);
+    }
+    return { dataUrl: fallbackDataUrl, wasCropped: false, metrics: null };
+  }
+}

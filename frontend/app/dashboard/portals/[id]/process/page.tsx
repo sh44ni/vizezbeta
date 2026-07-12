@@ -8,6 +8,7 @@ import {
   ArrowLeft, Upload, Loader, Zap, CheckCircle, X, AlertTriangle,
   Eye, ExternalLink, Users, Send,
 } from 'lucide-react';
+import AutoSubmitModal from './AutoSubmitModal';
 
 const DOC_LABELS: Record<string, { label: string; emoji: string }> = {
   passport: { label: 'Passport', emoji: '🛂' },
@@ -45,6 +46,8 @@ export default function ProcessPage() {
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [submitMode, setSubmitMode] = useState<'legacy' | 'auto'>('legacy');
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const idCounter = useRef(0);
 
@@ -315,8 +318,39 @@ export default function ProcessPage() {
           <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
             {sent
               ? 'Open the extension popup → Fill tab to start filling.'
-              : `${errCount > 0 ? `${errCount} failed · ` : ''}Review data, then send to the extension`}
+              : `${errCount > 0 ? `${errCount} failed · ` : ''}Review data, then select your submission mode`}
           </p>
+
+          {!sent && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+              <div style={{ display: 'flex', background: 'var(--surface-2)', padding: '4px', borderRadius: 'var(--radius-lg)' }}>
+                <button
+                  onClick={() => setSubmitMode('legacy')}
+                  style={{
+                    padding: '8px 16px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                    borderRadius: 'var(--radius-md)', transition: 'all 0.2s',
+                    background: submitMode === 'legacy' ? 'var(--card-bg)' : 'transparent',
+                    color: submitMode === 'legacy' ? 'var(--text-primary)' : 'var(--text-muted)',
+                    boxShadow: submitMode === 'legacy' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                  }}
+                >
+                  Legacy Mode (Browser Extension)
+                </button>
+                <button
+                  onClick={() => setSubmitMode('auto')}
+                  style={{
+                    padding: '8px 16px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                    borderRadius: 'var(--radius-md)', transition: 'all 0.2s',
+                    background: submitMode === 'auto' ? 'var(--card-bg)' : 'transparent',
+                    color: submitMode === 'auto' ? 'var(--text-primary)' : 'var(--text-muted)',
+                    boxShadow: submitMode === 'auto' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                  }}
+                >
+                  Auto Submit Mode (Direct API)
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Applicant cards */}
@@ -379,9 +413,15 @@ export default function ProcessPage() {
         {doneApplicants.length > 0 && (
           <div style={{ textAlign: 'center' }}>
             {!sent ? (
-              <button className="btn-friendly" onClick={sendAndOpen} style={{ fontSize: '15px', padding: '14px 40px' }}>
-                <Send className="w-5 h-5" /> Send to Extension & Open Portal
-              </button>
+              submitMode === 'legacy' ? (
+                <button className="btn-friendly" onClick={sendAndOpen} style={{ fontSize: '15px', padding: '14px 40px' }}>
+                  <Send className="w-5 h-5" /> Send to Extension & Open Portal
+                </button>
+              ) : (
+                <button className="btn-friendly" onClick={() => setIsModalOpen(true)} style={{ fontSize: '15px', padding: '14px 40px' }}>
+                  <Zap className="w-5 h-5" /> Start Auto Submission
+                </button>
+              )
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
                 <div style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '12px 24px', background: 'var(--card-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
@@ -394,6 +434,12 @@ export default function ProcessPage() {
             )}
           </div>
         )}
+        <AutoSubmitModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          applicants={doneApplicants}
+          portalId={portalId}
+        />
       </div>
     </main>
   );

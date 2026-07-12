@@ -6,7 +6,10 @@
 
   // Listen for scan requests from the web app or popup
   // BUT skip if we're on a VizEz page — avoid scanning the dashboard itself
-  const isVizEzPage = ['localhost:3000', 'vizez.cloud', 'viz-ez.com', 'vizez.vercel.app']
+  // Allow demo portals like /evisarepublic to be scanned even on localhost
+  const demoPortalPaths = ['/evisarepublic'];
+  const isDemoPortal = demoPortalPaths.some(p => window.location.pathname.startsWith(p));
+  const isVizEzPage = !isDemoPortal && ['localhost:3000', 'localhost:3001', 'localhost:3002', 'vizez.cloud', 'viz-ez.com', 'vizez.vercel.app']
     .some(p => window.location.href.includes(p));
 
   if (!isVizEzPage) {

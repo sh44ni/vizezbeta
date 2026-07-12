@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from routers.enhance import router as enhance_router
+from routers.photo import router as photo_router
 
 # Configure structured logging
 logging.basicConfig(
@@ -54,6 +55,7 @@ app.add_middleware(
 )
 
 app.include_router(enhance_router, prefix="/api/v1", tags=["Document Expert"])
+app.include_router(photo_router, prefix="/api/v1", tags=["Photo Processor"])
 
 # ── Processor Secret Authentication ──
 PROCESSOR_SECRET = os.environ.get("PROCESSOR_SECRET", "")
